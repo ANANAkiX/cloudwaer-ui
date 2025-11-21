@@ -21,6 +21,25 @@
             @keyup.enter="handleLogin"
           />
         </el-form-item>
+        <el-form-item v-if="captchaEnabled" prop="captchaCode">
+          <div class="captcha-row">
+            <el-input
+              v-model="loginForm.captchaCode"
+              placeholder="请输入验证码"
+              prefix-icon="CircleCheck"
+              size="large"
+              @keyup.enter="handleLogin"
+              class="captcha-input"
+            />
+            <img
+              v-if="captchaImage"
+              :src="captchaImage"
+              class="captcha-img"
+              alt="captcha"
+              @click="refreshCaptcha"
+            />
+          </div>
+        </el-form-item>
         <el-form-item>
           <el-button
             type="primary"
@@ -43,6 +62,8 @@ import { useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { FormInstance, FormRules } from 'element-plus'
 import { message } from '@/api/request.ts'
+import { getCaptcha } from '@/api/captcha'
+import { LOGIN_CAPTCHA_SWITCH } from '@/config/app'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -52,8 +73,13 @@ const loading = ref<boolean>(false)
 
 const loginForm = reactive({
   username: '',
-  password: ''
+  password: '',
+  captchaCode: ''
 })
+
+const captchaEnabled = ref<boolean>(false)
+const captchaId = ref<string>('')
+const captchaImage = ref<string>('')
 
 const rules: FormRules = {
   username: [
@@ -61,15 +87,50 @@ const rules: FormRules = {
   ],
   password: [
     { required: true, message: '请输入密码', trigger: 'blur' }
+  ],
+  captchaCode: [
+    {
+      validator: (_rule, value, callback) => {
+        if (!captchaEnabled.value) return callback()
+        if (!value) return callback(new Error('请输入验证码'))
+        callback()
+      },
+      trigger: 'blur'
+    }
   ]
 }
 
 // 检查登录状态，如果已登录则跳转到首页
-onMounted(() => {
+onMounted(async () => {
   if (userStore.token) {
     router.push('/')
+    return
+  }
+  if ((LOGIN_CAPTCHA_SWITCH === 'on')) {
+    await refreshCaptcha()
+  } else {
+    captchaEnabled.value = false
   }
 })
+
+const refreshCaptcha = async (): Promise<void> => {
+  try {
+    const resp = await getCaptcha()
+    if (resp && resp.enabled) {
+      captchaEnabled.value = true
+      captchaId.value = resp.captchaId || ''
+      captchaImage.value = resp.imageBase64 || ''
+      loginForm.captchaCode = ''
+    } else {
+      captchaEnabled.value = false
+      captchaId.value = ''
+      captchaImage.value = ''
+      loginForm.captchaCode = ''
+    }
+  } catch (e) {
+    captchaEnabled.value = false
+  }
+}
 
 const handleLogin = async (): Promise<void> => {
   if (!loginFormRef.value) return
@@ -78,7 +139,10 @@ const handleLogin = async (): Promise<void> => {
     if (valid) {
       loading.value = true
       try {
-        const result = await userStore.login(loginForm.username, loginForm.password)
+        const captchaPayload = captchaEnabled.value
+          ? { captchaId: captchaId.value, captchaCode: loginForm.captchaCode }
+          : undefined
+        const result = await userStore.login(loginForm.username, loginForm.password, captchaPayload)
         if (result.success) {
           message.success('登录成功')
           router.push('/')
@@ -126,6 +190,20 @@ const handleLogin = async (): Promise<void> => {
 .login-button {
   width: 100%;
 }
-</style>
 
+.captcha-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+.captcha-input { flex: 1 1 auto; min-width: 180px; }
+.captcha-img {
+  height: 40px;
+  cursor: pointer;
+  border: 1px solid #eee;
+  border-radius: 4px;
+}
+.captcha-refresh { white-space: nowrap; }
+</style>
 

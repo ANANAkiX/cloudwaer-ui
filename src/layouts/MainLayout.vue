@@ -222,8 +222,8 @@ onMounted(() => {
   // 恢复标签页
   tabsStore.restoreTabs()
   
-  // 如果 store 中还没有路由数据，则加载
-  if (!userStore.menuRoutes || userStore.menuRoutes.length === 0) {
+  // 如果路由或权限任一还未加载，则加载（防止仅有路由时未加载权限的情况）
+  if (!userStore.menuRoutes || userStore.menuRoutes.length === 0 || !userStore.permissionCodes || userStore.permissionCodes.length === 0) {
     loadUserData()
   }
   

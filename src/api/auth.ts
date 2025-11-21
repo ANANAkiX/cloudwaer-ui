@@ -1,5 +1,4 @@
 import request from './request.ts'
-import { Result } from '@/types'
 
 /**
  * 登录响应
@@ -8,14 +7,25 @@ export interface LoginResponse {
   token: string
 }
 
+export interface CaptchaPayload {
+  captchaId?: string
+  captchaCode?: string
+}
+
 /**
  * 登录
  */
-export function login(username: string, password: string): Promise<LoginResponse> {
+export function login(username: string, password: string, captcha?: CaptchaPayload): Promise<LoginResponse> {
+  const headers: Record<string, string> = {}
+  if (captcha?.captchaId && captcha?.captchaCode) {
+    headers['X-Captcha-Id'] = captcha.captchaId
+    headers['X-Captcha-Code'] = captcha.captchaCode
+  }
   return request({
     url: '/auth/login',
     method: 'post',
-    data: { username, password }
+    data: { username, password },
+    headers: Object.keys(headers).length ? headers : undefined
   })
 }
 
