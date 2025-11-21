@@ -223,7 +223,7 @@
                 style="max-height: 500px; overflow-y: auto"
                 @node-click="handleFileClick"
               >
-                <template #default="{ node, data }">
+                <template #default="{ data }">
                   <span 
                     style="display: flex; align-items: center; gap: 5px; cursor: pointer"
                     :style="{ color: data.isFile ? '#409EFF' : 'inherit' }"
@@ -254,14 +254,11 @@
           :title="filePreviewPath"
           width="80%"
           top="5vh"
+          :destroy-on-close="true"
+          @opened="onDialogOpened"
+          class="code-dialog"
         >
-          <el-input
-            v-model="filePreviewContent"
-            type="textarea"
-            :rows="30"
-            readonly
-            style="font-family: 'Consolas', 'Monaco', 'Courier New', monospace; font-size: 14px"
-          />
+          <pre class="code-preview"><code :key="filePreviewPath + ':' + displayContent.length + ':' + (filePreviewVisible ? 1 : 0)" :class="previewLang" ref="codeRef" v-text="displayContent"></code></pre>
           <template #footer>
             <el-button @click="filePreviewVisible = false">关闭</el-button>
             <el-button type="primary" @click="handleCopyContent">复制内容</el-button>
@@ -294,7 +291,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, nextTick, watch } from 'vue'
 import { message } from '@/api/request.ts'
 import {
   getDatabaseConnectionList,
@@ -358,6 +355,38 @@ const downloadLoading = ref(false)
 const filePreviewVisible = ref(false)
 const filePreviewPath = ref('')
 const filePreviewContent = ref('')
+const codeRef = ref<HTMLElement | null>(null)
+const previewLang = computed(() => {
+  const p = filePreviewPath.value || ''
+  const ext = (p.split('.').pop() || '').toLowerCase()
+  if (ext === 'java') return 'language-java'
+  if (ext === 'kt') return 'language-kotlin'
+  if (ext === 'ts') return 'language-typescript'
+  if (ext === 'js') return 'language-javascript'
+  if (ext === 'vue') return 'language-html'
+  if (ext === 'html') return 'language-html'
+  if (ext === 'xml') return 'language-xml'
+  if (ext === 'yml' || ext === 'yaml') return 'language-yaml'
+  if (ext === 'properties' || ext === 'ini') return 'language-ini'
+  if (ext === 'sql') return 'language-sql'
+  if (ext === 'json') return 'language-json'
+  if (ext === 'md') return 'language-markdown'
+  if (ext === 'css') return 'language-css'
+  if (ext === 'scss' || ext === 'sass') return 'language-scss'
+  return 'language-plaintext'
+})
+
+// 仅用于显示：去掉BOM与文档起始处的前导空白（不改动真实内容，复制时仍是显示内容）
+const displayContent = computed(() => {
+  let text = filePreviewContent.value || ''
+  // 去BOM
+  if (text.charCodeAt(0) === 0xFEFF) {
+    text = text.slice(1)
+  }
+  // 去掉文件开头的所有空白（包含 unicode 不间断空格、全角空格等）
+  const idx = text.search(/[^\s\u00A0\u3000]/)
+  return idx <= 0 ? text.trimStart() : text.slice(idx)
+})
 
 // 加载数据库连接列表
 const loadConnectionList = async () => {
@@ -376,7 +405,7 @@ const handleConnectionChange = async () => {
   }
   loading.value = true
   try {
-    const data = await getTableList(connectionForm.connectionId)
+    const data = await getTableList(connectionForm.connectionId as string | number)
     // 将表名转换为对象数组，方便显示注释
     tableList.value = (data || []).map((tableName: string) => ({
       tableName,
@@ -406,7 +435,7 @@ const handleSelectTable = async (tableName: string) => {
   loading.value = true
   try {
     // 获取表结构元数据
-    const metadata = await getTableMetadata(connectionForm.connectionId, tableName)
+    const metadata = await getTableMetadata(connectionForm.connectionId as string | number, tableName)
     tableMetadata.value = metadata
 
     // 设置主键字段
@@ -438,7 +467,7 @@ const handleSelectTable = async (tableName: string) => {
 
     // 自动生成表单配置
     try {
-      const config = await generateFormConfig(connectionForm.connectionId, tableName)
+      const config = await generateFormConfig(connectionForm.connectionId as string | number, tableName)
       formConfig.entityName = config.entityName || convertTableNameToEntityName(tableName)
       formConfig.entityComment = config.entityComment || formConfig.entityName
       formConfig.queryFields = config.queryFields || []
@@ -752,6 +781,28 @@ const getFrontendType = (dataType: string, javaType: string): string => {
 onMounted(() => {
   loadConnectionList()
 })
+
+const highlightNow = async () => {
+  await nextTick()
+  const w: any = window as any
+  if (codeRef.value && w && w.hljs) {
+    // 移除旧的高亮class，避免重复或丢失
+    codeRef.value.classList.remove('hljs')
+    w.hljs.highlightElement(codeRef.value)
+  }
+}
+
+watch(filePreviewVisible, (v) => {
+  if (v) highlightNow()
+})
+
+watch(filePreviewContent, () => {
+  if (filePreviewVisible.value) highlightNow()
+})
+
+const onDialogOpened = () => {
+  highlightNow()
+}
 </script>
 
 <style scoped>
@@ -772,6 +823,28 @@ onMounted(() => {
 
 .step-actions {
   padding: 20px 0;
+}
+
+.code-preview {
+  max-height: 70vh;
+  overflow: auto;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-size: 14px;
+  margin: 0;
+  padding: 0; /* 彻底移除 pre 的内边距 */
+  background: #f8f8f8;
+  border-radius: 4px;
+}
+.code-preview .hljs {
+  padding: 0 !important;
+  margin: 0;
+}
+.code-preview code {
+  display: block;
+  padding: 0 12px 12px 0; /* 左侧为0，避免视觉缩进 */
+}
+.code-dialog :deep(.el-dialog__body) {
+  padding: 0 !important; /* 去掉 body 的所有内边距 */
 }
 </style>
 

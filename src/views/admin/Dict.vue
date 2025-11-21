@@ -149,7 +149,7 @@ onMounted(fetchPage)
         <el-table-column prop="value" label="值" width="140" align="center" />
         <el-table-column prop="label" label="显示名称" align="center" />
         <el-table-column prop="sort" label="排序" width="100" align="center" />
-        <el-table-column label="状态" width="160" align="center">
+        <el-table-column label="状态" width="200" align="center">
           <template #default="{ row }">
             <DictSelect v-model="row.status" type="status" valueField="code" labelField="label" style="width: 140px" />
           </template>
