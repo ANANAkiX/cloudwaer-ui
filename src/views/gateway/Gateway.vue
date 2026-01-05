@@ -20,9 +20,9 @@
               <template #dropdown>
                 <el-dropdown-menu>
                   <el-dropdown-item @click="useTemplateExternalProxy()">外链代理（IFrame 内嵌/Nacos示例）</el-dropdown-item>
-                  <el-dropdown-item @click="useTemplateSwagger('admin',4102)">Swagger（Admin 服务）</el-dropdown-item>
-                  <el-dropdown-item @click="useTemplateSwagger('authentication',4101)">Swagger（Auth 服务）</el-dropdown-item>
-                  <el-dropdown-item divided @click="useTemplateBasic('cloudwaer-admin-serve','/admin/**','lb://cloudwaer-admin-serve')">基础转发（Admin）</el-dropdown-item>
+                  <el-dropdown-item @click="useTemplateSwagger('admin', gatewayTemplateDefaults.swaggerPorts.admin)">Swagger（Admin 服务）</el-dropdown-item>
+                  <el-dropdown-item @click="useTemplateSwagger('authentication', gatewayTemplateDefaults.swaggerPorts.authentication)">Swagger（Auth 服务）</el-dropdown-item>
+                  <el-dropdown-item divided @click="useTemplateBasic(gatewayTemplateDefaults.baseRoute.serviceId, gatewayTemplateDefaults.baseRoute.pathPattern, gatewayTemplateDefaults.baseRoute.uri)">基础转发（Admin）</el-dropdown-item>
                 </el-dropdown-menu>
               </template>
             </el-dropdown>
@@ -259,6 +259,7 @@ import {
   type GatewayRouteInfo
 } from '@/api/gateway'
 import { checkButtonPermission } from '@/utils/permission'
+import { GATEWAY_TEMPLATE_DEFAULTS, GATEWAY_TEMPLATE_CSP } from '@/config/app'
 
 const loading = ref<boolean>(false)
 const submitLoading = ref<boolean>(false)
@@ -288,6 +289,8 @@ const canAdd = computed(() => checkButtonPermission('gateway', 'admin:gateway:ad
 const canEdit = computed(() => checkButtonPermission('gateway', 'admin:gateway:edit'))
 const canDelete = computed(() => checkButtonPermission('gateway', 'admin:gateway:delete'))
 const canRefresh = computed(() => checkButtonPermission('gateway', 'admin:gateway:refresh'))
+
+const gatewayTemplateDefaults = GATEWAY_TEMPLATE_DEFAULTS
 
 const formData = ref<GatewayRouteInfo>({
   routeId: '',
@@ -537,16 +540,16 @@ const useTemplateExternalProxy = () => {
   dialogTitle.value = '新增路由 - 外链代理模板'
   resetForm()
   formData.value = {
-    routeId: 'ext-nacos',
-    uri: 'http://localhost:8848',
+    routeId: gatewayTemplateDefaults.nacosRouteId,
+    uri: gatewayTemplateDefaults.nacosUri,
     predicates: [
-      { name: 'Path', args: { pattern: '/ext-proxy/nacos/**' } }
+      { name: 'Path', args: { pattern: gatewayTemplateDefaults.nacosPathPattern } }
     ],
     filters: [
       { name: 'StripPrefix', args: { parts: '2' } },
       { name: 'RemoveResponseHeader', args: { name: 'X-Frame-Options' } },
       { name: 'RemoveResponseHeader', args: { name: 'Content-Security-Policy' } },
-      { name: 'SetResponseHeader', args: { name: 'Content-Security-Policy', value: "frame-ancestors 'self' http://localhost:5173 http://localhost:4100" } },
+      { name: 'SetResponseHeader', args: { name: 'Content-Security-Policy', value: GATEWAY_TEMPLATE_CSP } },
       { name: 'RewriteResponseHeader', args: { name: 'Set-Cookie', regexp: 'Path=/nacos', replacement: 'Path=/ext-proxy/nacos' } },
       { name: 'RewriteResponseHeader', args: { name: 'Location', regexp: '^/nacos/(.*)$', replacement: '/ext-proxy/nacos/$1' } }
     ],
@@ -571,7 +574,7 @@ const useTemplateSwagger = (service: 'admin' | 'authentication', port: number) =
       { name: 'StripPrefix', args: { parts: '2' } },
       { name: 'RemoveResponseHeader', args: { name: 'X-Frame-Options' } },
       { name: 'RemoveResponseHeader', args: { name: 'Content-Security-Policy' } },
-      { name: 'SetResponseHeader', args: { name: 'Content-Security-Policy', value: "frame-ancestors 'self' http://localhost:5173 http://localhost:4100" } }
+      { name: 'SetResponseHeader', args: { name: 'Content-Security-Policy', value: GATEWAY_TEMPLATE_CSP } }
     ],
     order: 0,
     description: `${service} 服务 Swagger 代理（IFrame 内嵌）`
@@ -621,4 +624,3 @@ onMounted(() => {
 }
 .more-indicator { color: #909399; }
 </style>
-

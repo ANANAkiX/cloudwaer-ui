@@ -114,6 +114,7 @@ import {
   deleteDatabaseConnection,
   type DatabaseConnectionInfo
 } from '@/api/codegen'
+import { createDefaultDbConnectionForm } from '@/config/app'
 
 const props = defineProps<{
   modelValue: boolean
@@ -142,16 +143,7 @@ const pagination = ref({
   total: 0
 })
 
-const formData = ref<Partial<DatabaseConnectionInfo>>({
-  name: '',
-  dbType: 'MySQL',
-  host: 'localhost',
-  port: 3306,
-  database: '',
-  username: '',
-  password: '',
-  enabled: true
-})
+const formData = ref<Partial<DatabaseConnectionInfo>>(createDefaultDbConnectionForm())
 
 const rules = {
   name: [{ required: true, message: '请输入连接名称', trigger: 'blur' }],
@@ -255,16 +247,7 @@ const handleSubmit = async () => {
 
 // 重置表单
 const resetForm = () => {
-  formData.value = {
-    name: '',
-    dbType: 'MySQL',
-    host: 'localhost',
-    port: 3306,
-    database: '',
-    username: '',
-    password: '',
-    enabled: true
-  }
+  formData.value = createDefaultDbConnectionForm()
   if (formRef.value) {
     formRef.value.resetFields()
   }
@@ -300,4 +283,3 @@ onMounted(() => {
   align-items: center;
 }
 </style>
-
