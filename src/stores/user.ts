@@ -1,5 +1,5 @@
 import {defineStore} from 'pinia'
-import {login as apiLogin, logout, type CaptchaPayload} from '@/api/auth.ts'
+import {login as apiLogin, logout, type CaptchaPayload, type LoginRequestDTO} from '@/api/auth.ts'
 import {UserInfo, RouteInfo} from '@/types'
 
 interface UserState {
@@ -17,13 +17,13 @@ export const useUserStore = defineStore('user', {
         permissionCodes: JSON.parse(localStorage.getItem('permissionCodes') || '[]') // 存储权限代码
     }),
     actions: {
-        async login(username: string, password: string, captcha?: CaptchaPayload): Promise<{
+        async login(payload: LoginRequestDTO, captcha?: CaptchaPayload): Promise<{
             success: boolean;
             message?: string
         }> {
             try {
                 //TODO 暂时固定账号密码登录 固定范围为 DEFAULT
-                const res = await apiLogin(username, password, "ACCESS_PASSWORD", "DEFAULT", captcha)
+                const res = await apiLogin(payload, captcha)
                 // 后端只返回 token
                 if (res && res.token) {
                     this.token = res.token

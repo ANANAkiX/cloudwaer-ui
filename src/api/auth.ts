@@ -12,10 +12,19 @@ export interface CaptchaPayload {
     captchaCode?: string
 }
 
+export interface LoginRequestDTO {
+    username?: string
+    email?: string
+    phone?: string
+    password: string
+    loginType: string
+    scope: string
+}
+
 /**
  * 登录
  */
-export function login(username: string, password: string, loginType: string, scope: string, captcha?: CaptchaPayload): Promise<LoginResponse> {
+export function login(payload: LoginRequestDTO, captcha?: CaptchaPayload): Promise<LoginResponse> {
     const headers: Record<string, string> = {}
     if (captcha?.captchaId && captcha?.captchaCode) {
         headers['X-Captcha-Id'] = captcha.captchaId
@@ -24,7 +33,7 @@ export function login(username: string, password: string, loginType: string, sco
     return request({
         url: '/auth/login',
         method: 'post',
-        data: {username, password, loginType,scope},
+        data: payload,
         headers: Object.keys(headers).length ? headers : undefined
     })
 }
@@ -38,4 +47,3 @@ export function logout(): Promise<void> {
         method: 'post'
     })
 }
-
