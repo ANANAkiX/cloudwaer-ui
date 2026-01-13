@@ -141,24 +141,24 @@ export const useTabsStore = defineStore('tabs', {
     },
     
     /**
-     * 持久化标签页到 localStorage
+     * 持久化标签页到 sessionStorage
      */
     persistTabs() {
       try {
-        localStorage.setItem('tabs', JSON.stringify(this.tabs))
-        localStorage.setItem('activeTab', this.activeTab)
+        sessionStorage.setItem('tabs', JSON.stringify(this.tabs))
+        sessionStorage.setItem('activeTab', this.activeTab)
       } catch (e) {
         console.error('保存标签页失败:', e)
       }
     },
     
     /**
-     * 从 localStorage 恢复标签页
+     * 从 sessionStorage 恢复标签页
      */
     restoreTabs() {
       try {
-        const tabsStr = localStorage.getItem('tabs')
-        const activeTabStr = localStorage.getItem('activeTab')
+        const tabsStr = sessionStorage.getItem('tabs')
+        const activeTabStr = sessionStorage.getItem('activeTab')
         
         if (tabsStr) {
           const savedTabs = JSON.parse(tabsStr)

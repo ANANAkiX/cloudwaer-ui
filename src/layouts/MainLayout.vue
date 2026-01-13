@@ -1,24 +1,18 @@
 <template>
   <el-container class="layout-container">
     <!-- 左侧菜单栏 -->
-    <el-aside :width="isCollapse ? '64px' : '200px'" class="sidebar">
+    <el-aside :width="isCollapse ? '64px' : '220px'" class="sidebar">
       <div class="logo">
-        <span v-if="!isCollapse">Cloudwaer</span>
-        <span v-else>C</span>
+        <div class="logo-icon">C</div>
+        <span v-if="!isCollapse" class="logo-text">Cloudwaer</span>
       </div>
       <el-menu
         :default-active="activeMenu"
         :collapse="isCollapse"
         router
         class="sidebar-menu"
-        background-color="#304156"
-        text-color="#bfcbd9"
-        active-text-color="#409EFF"
       >
-        <el-menu-item index="/dashboard">
-          <el-icon><House /></el-icon>
-          <template #title>首页</template>
-        </el-menu-item>
+        <menu-item :route="dashboardRoute" />
         <!-- 动态菜单项 -->
         <menu-item
           v-for="route in menuRoutes"
@@ -32,18 +26,40 @@
       <!-- 顶部导航栏 -->
       <el-header class="header">
         <div class="header-left">
-          <el-icon class="collapse-icon" @click="toggleCollapse">
+          <el-icon class="header-icon" @click="toggleCollapse">
             <Expand v-if="isCollapse" />
             <Fold v-else />
           </el-icon>
-        </div>
-        <div class="header-center">
-          <span class="header-title">顶部导航栏以及其他信息</span>
+          <el-icon class="header-icon" @click="handleRefresh">
+            <Refresh />
+          </el-icon>
+          <el-breadcrumb class="header-breadcrumb" separator="/">
+            <el-breadcrumb-item
+              v-for="item in breadcrumbs"
+              :key="item.path"
+            >
+              {{ item.title }}
+            </el-breadcrumb-item>
+          </el-breadcrumb>
         </div>
         <div class="header-right">
+          <div class="header-actions">
+            <button class="header-action-btn" type="button">
+              <el-icon><Search /></el-icon>
+            </button>
+            <button class="header-action-btn" type="button">
+              <el-icon><Bell /></el-icon>
+            </button>
+            <button class="header-action-btn" type="button" @click="toggleFullscreen">
+              <el-icon><FullScreen /></el-icon>
+            </button>
+            <button class="header-action-btn" type="button">
+              <el-icon><Setting /></el-icon>
+            </button>
+          </div>
           <el-dropdown @command="handleCommand" trigger="click">
             <span class="user-avatar">
-              <el-avatar :size="40" :icon="UserFilled" />
+              <el-avatar :size="32" :icon="UserFilled" />
             </span>
             <template #dropdown>
               <el-dropdown-menu>
@@ -94,7 +110,7 @@
       
       <!-- 主内容区 -->
       <el-main class="main-content">
-        <router-view />
+        <router-view :key="viewKey" />
       </el-main>
     </el-container>
   </el-container>
@@ -106,7 +122,17 @@ import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { useTabsStore } from '@/stores/tabs'
 import { message } from '@/api/request.ts'
-import { House, Expand, Fold, UserFilled, ArrowDown } from '@element-plus/icons-vue'
+import {
+  Expand,
+  Fold,
+  UserFilled,
+  ArrowDown,
+  Refresh,
+  Search,
+  Bell,
+  FullScreen,
+  Setting
+} from '@element-plus/icons-vue'
 import MenuItem from './components/MenuItem.vue'
 
 const route = useRoute()
@@ -115,10 +141,21 @@ const userStore = useUserStore()
 const tabsStore = useTabsStore()
 
 const isCollapse = ref(false)
+const refreshKey = ref(0)
+const isRestoringTabs = ref(true)
 // 使用 computed 让菜单路由响应式地跟随 store 的变化
 const menuRoutes = computed(() => userStore.menuRoutes || [])
 
 const activeMenu = computed(() => route.path)
+
+const dashboardRoute = {
+  path: '/dashboard',
+  name: 'dashboard',
+  meta: {
+    title: '首页',
+    icon: 'House'
+  }
+}
 
 // 标签页相关
 const tabs = computed(() => tabsStore.tabs)
@@ -129,10 +166,28 @@ const activeTab = computed({
   }
 })
 
+const breadcrumbs = computed(() => {
+  const items = route.matched
+    .filter((item) => item.meta?.title || item.name)
+    .map((item) => ({
+      title: item.meta?.title || item.name,
+      path: item.path
+    }))
+  if (items.length === 0) {
+    return [{ title: route.name || route.path, path: route.path }]
+  }
+  return items
+})
+
+const viewKey = computed(() => `${route.fullPath}-${refreshKey.value}`)
+
 // 监听路由变化，自动添加标签页
 watch(
   () => route.path,
   (newPath) => {
+    if (isRestoringTabs.value) {
+      return
+    }
     // 忽略登录页和404页
     if (newPath === '/login' || newPath === '/404') {
       return
@@ -182,6 +237,18 @@ const toggleCollapse = () => {
   isCollapse.value = !isCollapse.value
 }
 
+const handleRefresh = () => {
+  refreshKey.value += 1
+}
+
+const toggleFullscreen = async () => {
+  if (!document.fullscreenElement) {
+    await document.documentElement.requestFullscreen?.()
+  } else {
+    await document.exitFullscreen?.()
+  }
+}
+
 const handleCommand = async (command) => {
   if (command === 'logout') {
     await userStore.logout()
@@ -221,6 +288,7 @@ const loadUserData = async () => {
 onMounted(() => {
   // 恢复标签页
   tabsStore.restoreTabs()
+  isRestoringTabs.value = false
   
   // 如果路由或权限任一还未加载，则加载（防止仅有路由时未加载权限的情况）
   if (!userStore.menuRoutes || userStore.menuRoutes.length === 0 || !userStore.permissionCodes || userStore.permissionCodes.length === 0) {
@@ -243,100 +311,227 @@ onMounted(() => {
 <style scoped>
 .layout-container {
   height: 100vh;
+  background-color: #f5f7fb;
 }
 
 .sidebar {
-  background-color: #304156;
+  background: linear-gradient(180deg, #0b1f35 0%, #0a1726 100%);
   overflow: hidden;
   transition: width 0.3s;
+  box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.05);
 }
 
 .logo {
-  height: 60px;
-  line-height: 60px;
-  text-align: center;
-  color: white;
-  font-size: 20px;
-  font-weight: bold;
-  background-color: #2b3a4a;
-  overflow: hidden;
+  height: 64px;
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: #fff;
+  font-weight: 600;
+  background: rgba(7, 20, 33, 0.65);
+}
+
+.logo-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #2f7bff, #57b0ff);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 18px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.logo-text {
+  font-size: 18px;
+  letter-spacing: 0.5px;
 }
 
 .sidebar-menu {
   border: none;
-  height: calc(100vh - 60px);
+  height: calc(100vh - 64px);
   overflow-y: auto;
+  background: transparent;
+  padding: 6px 0 12px;
 }
 
 .sidebar-menu:not(.el-menu--collapse) {
-  width: 200px;
+  width: 220px;
+}
+
+.sidebar :deep(.el-menu) {
+  background-color: transparent;
+  border-right: none;
+}
+
+.sidebar :deep(.el-menu-item),
+.sidebar :deep(.el-sub-menu__title) {
+  height: 44px;
+  line-height: 44px;
+  margin: 4px 12px;
+  border-radius: 10px;
+  color: #cbd5e1;
+}
+
+.sidebar :deep(.el-menu--collapse .el-menu-item),
+.sidebar :deep(.el-menu--collapse .el-sub-menu__title) {
+  margin: 4px auto;
+  width: 44px;
+  justify-content: center;
+  padding: 0;
+  text-align: center;
+}
+
+.sidebar :deep(.el-menu--collapse .el-menu-item .el-tooltip__trigger),
+.sidebar :deep(.el-menu--collapse .el-sub-menu__title .el-tooltip__trigger) {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+.sidebar :deep(.el-menu--collapse .el-menu-item .el-icon),
+.sidebar :deep(.el-menu--collapse .el-sub-menu__title .el-icon) {
+  margin: 0;
+}
+
+.sidebar :deep(.el-menu-item .el-icon),
+.sidebar :deep(.el-sub-menu__title .el-icon) {
+  color: #9fb2c7;
+}
+
+.sidebar :deep(.el-sub-menu__icon-arrow) {
+  color: #8aa0b7;
+}
+
+.sidebar :deep(.el-menu-item.is-active) {
+  background: rgba(36, 80, 130, 0.6);
+  color: #fff;
+  box-shadow: inset 3px 0 0 #4ea1ff;
+}
+
+.sidebar :deep(.el-menu--collapse .el-menu-item.is-active) {
+  box-shadow: none;
+}
+
+.sidebar :deep(.el-menu-item.is-active .el-icon) {
+  color: #fff;
+}
+
+.sidebar :deep(.el-menu-item:hover),
+.sidebar :deep(.el-sub-menu__title:hover) {
+  background: rgba(22, 44, 71, 0.85);
+  color: #fff;
+}
+
+.sidebar :deep(.el-sub-menu.is-active > .el-sub-menu__title) {
+  background: rgba(22, 44, 71, 0.85);
+  color: #fff;
 }
 
 .header {
-  background-color: white;
-  border-bottom: 1px solid #e6e6e6;
+  height: 56px;
+  background-color: #fff;
+  border-bottom: 1px solid #e9edf3;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 20px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  padding: 0 16px;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
 }
 
 .header-left {
   display: flex;
   align-items: center;
+  gap: 10px;
+  min-width: 0;
 }
 
-.collapse-icon {
-  font-size: 20px;
+.header-icon {
+  font-size: 18px;
   cursor: pointer;
-  color: #606266;
-  transition: color 0.3s;
+  color: #4b5563;
+  background: #f3f6fb;
+  border-radius: 8px;
+  padding: 6px;
+  transition: all 0.2s ease;
 }
 
-.collapse-icon:hover {
-  color: #409EFF;
+.header-icon:hover {
+  color: #1f6feb;
+  background: #e9f2ff;
 }
 
-.header-center {
-  flex: 1;
-  display: flex;
-  justify-content: center;
-  align-items: center;
+.header-breadcrumb {
+  margin-left: 4px;
 }
 
-.header-title {
-  color: #606266;
-  font-size: 16px;
+.header-breadcrumb :deep(.el-breadcrumb__inner) {
+  color: #4b5563;
+  font-weight: 500;
 }
 
 .header-right {
   display: flex;
   align-items: center;
+  gap: 12px;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.header-action-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid #eef1f6;
+  background: #fff;
+  color: #4b5563;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.header-action-btn:hover {
+  color: #1f6feb;
+  border-color: #cfe1ff;
+  background: #f5f9ff;
 }
 
 .user-avatar {
   cursor: pointer;
   display: flex;
   align-items: center;
-  transition: transform 0.3s;
+  border: 1px solid #eef1f6;
+  padding: 2px;
+  border-radius: 999px;
+  transition: box-shadow 0.2s ease;
 }
 
 .user-avatar:hover {
-  transform: scale(1.1);
+  box-shadow: 0 0 0 3px rgba(64, 149, 255, 0.12);
 }
 
 .tabs-container {
-  background-color: white;
+  background-color: #fff;
   display: flex;
   align-items: center;
-  padding: 0 20px;
-  min-height: 40px;
+  padding: 0 16px;
+  min-height: 44px;
+  border-bottom: 1px solid #eef2f7;
 }
 
 .tabs-wrapper {
   flex: 1;
-  min-width: 0; /* 允许flex子元素收缩 */
+  min-width: 0;
 }
 
 .tabs-container :deep(.el-tabs) {
@@ -373,12 +568,12 @@ onMounted(() => {
 .tabs-container :deep(.el-tabs__header) {
   margin: 0;
   border: none !important;
-  height: 40px;
+  height: 44px;
 }
 
 .tabs-container :deep(.el-tabs__nav-wrap) {
   border: none !important;
-  height: 40px;
+  height: 44px;
 }
 
 .tabs-container :deep(.el-tabs__nav-wrap::after) {
@@ -398,52 +593,36 @@ onMounted(() => {
 }
 
 .tabs-container :deep(.el-tabs__nav) {
-  height: 40px;
+  height: 44px;
 }
 
 .tabs-container :deep(.el-tabs__item) {
-  height: 32px;
-  line-height: 32px;
-  padding: 0 15px;
-  margin-top: 4px;
-  border: none !important;
-  border-width: 0 !important;
-  border-style: none !important;
-  border-color: transparent !important;
-  border-radius: 0 !important;
-  margin-right: 4px;
-  transition: all 0.3s;
-  box-shadow: none !important;
-  outline: none !important;
-  -webkit-box-shadow: none !important;
-  -moz-box-shadow: none !important;
+  height: 30px;
+  line-height: 30px;
+  padding: 0 12px;
+  margin-top: 7px;
+  margin-right: 8px;
+  border: 1px solid #e5e9f2;
+  border-radius: 8px;
+  background: #f6f8fb;
+  color: #4b5563;
+  transition: all 0.2s ease;
 }
 
 .tabs-container :deep(.el-tabs__item.is-active) {
-  background-color: #409eff;
-  color: white;
-  border: none !important;
-  border-width: 0 !important;
-  border-style: none !important;
-  border-color: transparent !important;
-  box-shadow: none !important;
-  outline: none !important;
-  -webkit-box-shadow: none !important;
-  -moz-box-shadow: none !important;
+  background-color: #fff;
+  color: #1f6feb;
+  border-color: #c9d7ef;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.08);
 }
 
 .tabs-container :deep(.el-tabs__item:hover) {
-  color: #409eff;
-  border: none !important;
-  box-shadow: none !important;
-  outline: none !important;
+  color: #1f6feb;
+  background: #fff;
 }
 
 .tabs-container :deep(.el-tabs__item.is-active:hover) {
-  color: white;
-  border: none !important;
-  box-shadow: none !important;
-  outline: none !important;
+  color: #1f6feb;
 }
 
 .tabs-container :deep(.el-tabs__item .el-icon-close) {
@@ -452,11 +631,11 @@ onMounted(() => {
 }
 
 .tabs-container :deep(.el-tabs__item.is-active .el-icon-close) {
-  color: white;
+  color: #1f6feb;
 }
 
 .tabs-container :deep(.el-tabs__item.is-active .el-icon-close:hover) {
-  background-color: rgba(255, 255, 255, 0.2);
+  background-color: rgba(31, 111, 235, 0.1);
   border-radius: 50%;
 }
 
@@ -464,20 +643,19 @@ onMounted(() => {
   margin-left: 10px;
   display: flex;
   align-items: center;
-  flex-shrink: 0; /* 防止按钮被压缩 */
+  flex-shrink: 0;
 }
 
 .tabs-dropdown-btn {
   padding: 4px 8px;
+  border-radius: 6px;
+  background: #f6f8fb;
 }
 
 .main-content {
-  background-color: #f0f2f5;
+  background-color: #f5f7fb;
   padding: 20px;
   overflow-y: auto;
-  height: calc(100vh - 100px); /* 减去 header (60px) 和 tabs (40px) 的高度 */
+  height: calc(100vh - 100px);
 }
 </style>
-
-
-

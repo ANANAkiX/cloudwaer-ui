@@ -134,31 +134,15 @@
             </el-select>
           </el-form-item>
           <el-form-item label="API地址" prop="apiUrl">
-          <el-cascader
-            v-model="apiCascaderValue"
-            :options="apiCascaderOptions"
-            :props="apiCascaderProps"
-            placeholder="请选择服务 -> API地址"
-            clearable
-            filterable
-            style="width: 100%"
-            @change="handleApiCascaderChange"
-          >
-            <template #default="{ node, data }">
-              <span v-if="data.serviceName">
-                {{ data.serviceLabel }}
-              </span>
-              <span v-else>
-                <el-tag :type="getMethodTagType(data.method)" size="small" style="margin-right: 8px">
-                  {{ data.method }}
-                </el-tag>
-                {{ data.fullPath }}
-                <span v-if="data.description" style="color: #909399; margin-left: 8px; font-size: 12px">
-                  {{ data.description }}
-                </span>
-              </span>
-            </template>
-          </el-cascader>
+            <el-input
+              v-model="apiDisplayValue"
+              placeholder="请选择API地址"
+              readonly
+              clearable
+              style="width: 100%"
+              @click="openApiDialog"
+              @clear="clearApiSelection"
+            />
           </el-form-item>
         </template>
         <el-form-item label="图标" prop="icon">
@@ -181,11 +165,66 @@
         <el-button type="primary" @click="handleSubmit" :loading="submitLoading">确定</el-button>
       </template>
     </el-dialog>
+
+    <el-dialog v-model="apiDialogVisible" title="选择API" width="1080px" class="api-picker-dialog">
+      <div class="api-dialog">
+        <div class="api-services">
+          <div class="api-services-title">服务列表</div>
+          <el-scrollbar height="360px">
+            <el-menu
+              :default-active="selectedServiceName"
+              class="api-services-menu"
+              @select="handleServiceSelect"
+            >
+              <el-menu-item
+                v-for="service in serviceApiList"
+                :key="service.serviceName"
+                :index="service.serviceName"
+              >
+                {{ service.serviceLabel || service.serviceName }}
+              </el-menu-item>
+            </el-menu>
+          </el-scrollbar>
+        </div>
+        <div class="api-list">
+          <div class="api-list-title">
+            {{ selectedServiceLabel || 'API列表' }}
+          </div>
+          <div class="api-table-wrapper">
+            <el-table
+              :data="selectedServiceApis"
+              height="100%"
+              border
+              @row-dblclick="handleApiPick"
+            >
+            <el-table-column type="index" label="ID" width="60" />
+            <el-table-column prop="fullPath" label="请求地址" min-width="260" />
+            <el-table-column prop="method" label="请求方式" width="120">
+              <template #default="scope">
+                <el-tag :type="getMethodTagType(scope.row.method)">
+                  {{ scope.row.method }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column prop="description" label="描述" min-width="200" />
+            <el-table-column label="操作" width="100" align="center">
+              <template #default="scope">
+                <el-button type="primary" link @click="handleApiPick(scope.row)">选择</el-button>
+              </template>
+            </el-table-column>
+            </el-table>
+          </div>
+        </div>
+      </div>
+      <template #footer>
+        <el-button @click="apiDialogVisible = false">取消</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch, nextTick } from 'vue'
+import { ref, computed, onMounted, nextTick } from 'vue'
 import { ElMessageBox, FormInstance } from 'element-plus'
 import { message } from '@/api/request.ts'
 import { Plus, Search } from '@element-plus/icons-vue'
@@ -225,8 +264,34 @@ const formData = ref({
   description: ''
 })
 
-const apiCascaderValue = ref<string[]>([])
-const apiCascaderOptions = ref<ServiceInfo[]>([])
+const apiDialogVisible = ref<boolean>(false)
+const serviceApiList = ref<ServiceInfo[]>([])
+const selectedServiceName = ref<string>('')
+const selectedServiceLabel = ref<string>('')
+
+const apiDisplayValue = computed({
+  get: () => {
+    if (!formData.value.apiUrl) {
+      return ''
+    }
+    if (formData.value.httpMethod) {
+      return `${formData.value.httpMethod} ${formData.value.apiUrl}`
+    }
+    return formData.value.apiUrl
+  },
+  set: (value) => {
+    if (!value) {
+      clearApiSelection()
+    }
+  }
+})
+
+const selectedServiceApis = computed<ApiInfo[]>(() => {
+  const service = serviceApiList.value.find(
+    (item) => item.serviceName === selectedServiceName.value
+  )
+  return service?.apis || []
+})
 
 // 动态验证规则
 const rules = computed(() => {
@@ -324,158 +389,71 @@ const flattenTree = (tree) => {
   return result
 }
 
-// 加载服务API级联选择器数据
-const loadApiCascaderOptions = async () => {
+// 加载服务API列表
+const loadServiceApiList = async () => {
   try {
     const data = await getAllServiceApis()
-    const options = []
-    
+    const services: ServiceInfo[] = []
+
     for (const service of data || []) {
-      const serviceOption = {
-        value: service.serviceName,
-        label: service.serviceLabel,
+      const serviceItem: ServiceInfo = {
         serviceName: service.serviceName,
         serviceLabel: service.serviceLabel,
-        children: []
+        apis: service.apis || []
       }
-      
-      // 如果服务已经有API数据，直接使用
-      if (service.apis && service.apis.length > 0) {
-        serviceOption.children = service.apis.map(api => ({
-          value: api.fullPath,
-          // label包含方法、路径和描述，方便中文搜索
-          label: api.description 
-            ? `${api.method} ${api.fullPath} ${api.description}`
-            : `${api.method} ${api.fullPath}`,
-          method: api.method,
-          fullPath: api.fullPath,
-          description: api.description || '',
-          leaf: true
-        }))
-      } else {
-        // 如果没有API数据，通过API获取
+
+      if (!serviceItem.apis || serviceItem.apis.length === 0) {
         try {
-          const apiData = await getServiceApis(service.serviceName)
-          serviceOption.children = (apiData || []).map(api => ({
-            value: api.fullPath,
-            // label包含方法、路径和描述，方便中文搜索
-            label: api.description 
-              ? `${api.method} ${api.fullPath} ${api.description}`
-              : `${api.method} ${api.fullPath}`,
-            method: api.method,
-            fullPath: api.fullPath,
-            description: api.description || '',
-            leaf: true
-          }))
+          serviceItem.apis = await getServiceApis(service.serviceName)
         } catch (error) {
           console.error(`加载服务 ${service.serviceName} 的API列表失败:`, error)
-          serviceOption.children = []
+          serviceItem.apis = []
         }
       }
-      
-      options.push(serviceOption)
+
+      services.push(serviceItem)
     }
-    
-    apiCascaderOptions.value = options
+
+    serviceApiList.value = services
+
+    if (!selectedServiceName.value && services.length > 0) {
+      selectedServiceName.value = services[0].serviceName
+      selectedServiceLabel.value = services[0].serviceLabel
+    }
   } catch (error) {
     console.error('加载服务API列表失败:', error)
-    // 错误消息已在 request.ts 中统一处理
   }
 }
 
-// 懒加载API子节点
-const loadApiCascaderChildren = async (node, resolve) => {
-  const { serviceName } = node.data
-  try {
-    const data = await getServiceApis(serviceName)
-    const children = (data || []).map(api => ({
-      value: api.fullPath,
-      label: `${api.method} ${api.fullPath}`,
-      method: api.method,
-      fullPath: api.fullPath,
-      description: api.description || '',
-      leaf: true
-    }))
-    resolve(children)
-  } catch (error) {
-    console.error(`加载服务 ${serviceName} 的API列表失败:`, error)
-    resolve([])
+const openApiDialog = async () => {
+  if (serviceApiList.value.length === 0) {
+    await loadServiceApiList()
   }
+  if (!selectedServiceName.value && serviceApiList.value.length > 0) {
+    selectedServiceName.value = serviceApiList.value[0].serviceName
+    selectedServiceLabel.value = serviceApiList.value[0].serviceLabel
+  }
+  apiDialogVisible.value = true
 }
 
-// 级联选择器配置
-const apiCascaderProps = {
-  value: 'value',
-  label: 'label',
-  children: 'children',
-  expandTrigger: 'hover', // 鼠标悬停展开
-  // 自定义过滤方法（支持中文搜索）
-  filterMethod: (node, keyword) => {
-    if (!keyword) {
-      return true
-    }
-    
-    const searchKeyword = keyword.trim()
-    // 检查是否包含中文
-    const hasChinese = /[\u4e00-\u9fa5]/.test(searchKeyword)
-    
-    // 如果是服务节点，搜索服务名称和显示名称
-    if (node.data && node.data.serviceName) {
-      const serviceLabel = node.data.serviceLabel || ''
-      const serviceName = node.data.serviceName || ''
-      if (hasChinese) {
-        return serviceLabel.includes(searchKeyword) || serviceName.includes(searchKeyword)
-      } else {
-        return serviceLabel.toLowerCase().includes(searchKeyword.toLowerCase()) || 
-               serviceName.toLowerCase().includes(searchKeyword.toLowerCase())
-      }
-    }
-    
-    // 如果是API节点，搜索路径、方法、描述和label
-    const label = node.label || ''
-    const fullPath = (node.data && node.data.fullPath) || ''
-    const method = (node.data && node.data.method) || ''
-    const description = (node.data && node.data.description) || ''
-    
-    if (hasChinese) {
-      return label.includes(searchKeyword) || 
-             fullPath.includes(searchKeyword) || 
-             method.includes(searchKeyword) || 
-             description.includes(searchKeyword)
-    } else {
-      const lowerKeyword = searchKeyword.toLowerCase()
-      return label.toLowerCase().includes(lowerKeyword) || 
-             fullPath.toLowerCase().includes(lowerKeyword) || 
-             method.toLowerCase().includes(lowerKeyword) || 
-             description.toLowerCase().includes(lowerKeyword)
-    }
-  }
+const handleServiceSelect = (serviceName: string) => {
+  selectedServiceName.value = serviceName
+  const service = serviceApiList.value.find((item) => item.serviceName === serviceName)
+  selectedServiceLabel.value = service?.serviceLabel || serviceName
 }
 
-// 级联选择器变化处理
-const handleApiCascaderChange = (value) => {
-  if (value && value.length === 2) {
-    const [serviceName, apiPath] = value
-    formData.value.apiUrl = apiPath
-    
-    // 从级联选择器数据中查找对应的API信息，自动设置请求类型和描述
-    const service = apiCascaderOptions.value.find(s => s.serviceName === serviceName)
-    if (service && service.children) {
-      const api = service.children.find(a => a.fullPath === apiPath)
-      if (api) {
-        // 自动设置请求类型
-        if (api.method) {
-          formData.value.httpMethod = api.method
-        }
-        // 自动填充描述（如果API有描述）
-        if (api.description) {
-          formData.value.description = api.description
-        }
-      }
-    }
-  } else {
-    formData.value.apiUrl = ''
+const handleApiPick = (api: ApiInfo) => {
+  formData.value.apiUrl = api.fullPath
+  formData.value.httpMethod = api.method
+  if (api.description) {
+    formData.value.description = api.description
   }
+  apiDialogVisible.value = false
+}
+
+const clearApiSelection = () => {
+  formData.value.apiUrl = ''
+  formData.value.httpMethod = ''
 }
 
 // 权限类型变化处理
@@ -484,7 +462,6 @@ const handlePermissionTypeChange = (value) => {
     // 菜单或页面：清空API相关字段
     formData.value.apiUrl = ''
     formData.value.httpMethod = ''
-    apiCascaderValue.value = []
   } else if (value === 3) {
     // 操作：清空路由路径
     formData.value.routePath = ''
@@ -541,22 +518,16 @@ const handleEdit = async (row) => {
     sort: row.sort || 0,
     description: row.description || ''
   }
-  // 设置级联选择器的值（如果有API地址，需要找到对应的服务）
   if (row.apiUrl) {
-    // 查找包含该API的服务
-    for (const service of apiCascaderOptions.value) {
-      if (service.children) {
-        const api = service.children.find(a => a.fullPath === row.apiUrl)
-        if (api) {
-          apiCascaderValue.value = [service.serviceName, row.apiUrl]
-          break
-        }
-      }
+    if (serviceApiList.value.length === 0) {
+      await loadServiceApiList()
     }
-    // 如果没找到，尝试懒加载
-    if (apiCascaderValue.value.length === 0) {
-      // 暂时设置为空，用户需要重新选择
-      apiCascaderValue.value = []
+    const matchService = serviceApiList.value.find((service) =>
+      service.apis?.some((api) => api.fullPath === row.apiUrl)
+    )
+    if (matchService) {
+      selectedServiceName.value = matchService.serviceName
+      selectedServiceLabel.value = matchService.serviceLabel
     }
   }
   dialogVisible.value = true
@@ -621,7 +592,6 @@ const resetForm = () => {
     sort: 0,
     description: ''
   }
-  apiCascaderValue.value = [] // 清空级联选择器的值
   if (formRef.value) {
     formRef.value.resetFields()
   }
@@ -640,7 +610,7 @@ const getIconComponent = (iconName) => {
 
 onMounted(() => {
   loadPermissionTree()
-  loadApiCascaderOptions() // 加载服务API级联选择器数据
+  loadServiceApiList() // 加载服务API列表
 })
 </script>
 
@@ -752,5 +722,74 @@ onMounted(() => {
   color: #909399;
   font-size: 12px;
 }
-</style>
 
+.api-dialog {
+  display: flex;
+  gap: 16px;
+  background: #f5f7fb;
+  padding: 12px;
+  border-radius: 8px;
+  height: 420px;
+  box-sizing: border-box;
+}
+
+.api-services {
+  width: 220px;
+  background: #fff;
+  border: 1px solid #ebeef5;
+  border-radius: 8px;
+  padding: 12px;
+  height: 100%;
+  box-sizing: border-box;
+}
+
+.api-services-title {
+  font-weight: 600;
+  margin-bottom: 10px;
+  color: #303133;
+}
+
+.api-services-menu {
+  border-right: none;
+}
+
+.api-list {
+  flex: 1;
+  background: #fff;
+  border: 1px solid #ebeef5;
+  border-radius: 8px;
+  padding: 12px;
+  height: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+}
+
+.api-list-title {
+  font-weight: 600;
+  margin-bottom: 10px;
+  color: #303133;
+}
+
+.api-table-wrapper {
+  flex: 1;
+  min-height: 0;
+}
+
+.api-picker-dialog :deep(.el-dialog__body) {
+  padding: 8px 16px 16px;
+}
+
+.api-picker-dialog :deep(.el-dialog__header) {
+  padding: 16px 16px 0;
+}
+
+.api-picker-dialog :deep(.el-table) {
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.api-picker-dialog :deep(.el-table__header) {
+  background: #f8fafc;
+}
+</style>

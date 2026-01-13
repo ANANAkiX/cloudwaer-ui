@@ -93,12 +93,14 @@ export interface RouteInfo {
  * 服务API信息
  */
 export interface ApiInfo {
-  serviceName: string
-  serviceLabel: string
   method: string
   path: string
   fullPath: string
+  methodName?: string
+  className?: string
   description?: string
+  apiId?: string
+  serviceId?: string
 }
 
 /**
