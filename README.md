@@ -79,3 +79,6 @@ location / {
 ## 常见问题
 - 删除旧的 JS 模块后仍请求 `.js`：请硬刷新（Ctrl+F5）或重启 dev 进程，清理 Vite 热更新缓存。
 - 登录后未跳转：已在 `request.ts` 中加强 `toLogin()` 兜底；若在 iframe 中也会顶层跳转.
+
+
+

@@ -62,34 +62,35 @@ const addRoutes = (routeList: RouteInfo[], parentName: string = 'MainLayout'): v
   }
   
   routeList.forEach(route => {
-    // 如果路由被隐藏，跳过（父级菜单通常被标记为hidden，不添加到路由中）
-    if (route.meta?.hidden) {
-      // 但如果有子路由，仍然需要递归处理子路由
-      if (route.children && route.children.length > 0 && Array.isArray(route.children)) {
-        addRoutes(route.children, parentName)
+    try {
+      // 如果路由被隐藏，跳过（父级菜单通常被标记为hidden，不添加到路由中）
+      if (route.meta?.hidden) {
+        // 但如果有子路由，仍然需要递归处理子路由
+        if (route.children && route.children.length > 0 && Array.isArray(route.children)) {
+          addRoutes(route.children, parentName)
+        }
+        return
       }
-      return
-    }
-    
-    // 检查path是否存在
-    if (!route.path) {
-      console.warn('路由path为空，跳过:', route)
-      // 如果有子路由，仍然处理子路由
-      if (route.children && route.children.length > 0 && Array.isArray(route.children)) {
-        addRoutes(route.children, parentName)
+      
+      // 检查path是否存在
+      if (!route.path) {
+        console.warn('路由path为空，跳过:', route)
+        // 如果有子路由，仍然处理子路由
+        if (route.children && route.children.length > 0 && Array.isArray(route.children)) {
+          addRoutes(route.children, parentName)
+        }
+        return
       }
-      return
-    }
-    
-    // 检查name是否存在
-    if (!route.name) {
-      console.warn('路由name为空，跳过:', route)
-      // 如果有子路由，仍然处理子路由
-      if (route.children && route.children.length > 0 && Array.isArray(route.children)) {
-        addRoutes(route.children, parentName)
+      
+      // 检查name是否存在
+      if (!route.name) {
+        console.warn('路由name为空，跳过:', route)
+        // 如果有子路由，仍然处理子路由
+        if (route.children && route.children.length > 0 && Array.isArray(route.children)) {
+          addRoutes(route.children, parentName)
+        }
+        return
       }
-      return
-    }
     
     // 检查是否有component，没有component的路由需要根据path自动生成
     // 如果component为空，尝试根据path自动生成component路径
@@ -257,7 +258,7 @@ const addRoutes = (routeList: RouteInfo[], parentName: string = 'MainLayout'): v
           routeConfig.component = componentModules[flexibleMatch]
         } else {
           // 如果还是没找到，记录警告并使用默认组件
-          console.warn(`组件路径未找到: ${fullPath}，组件名: ${componentName}，可用路径:`, Object.keys(componentModules).slice(0, 10))
+          console.warn(`组件路径未找到: ${fullPath}，组件名: ${componentName}`)
           routeConfig.component = () => import('../views/Dashboard.vue')
         }
       }
@@ -271,6 +272,9 @@ const addRoutes = (routeList: RouteInfo[], parentName: string = 'MainLayout'): v
     } else {
       // 没有子路由，直接添加
       router.addRoute(parentName, routeConfig)
+    }
+    } catch (error) {
+      console.error('添加路由时发生错误:', error, '路由信息:', route)
     }
   })
 }
@@ -319,7 +323,7 @@ router.beforeEach(async (to, _from, next) => {
 
   // 如果已登录，检查路由是否已加载
   if (userStore.token) {
-    // 检查是否有路由数据（从 localStorage 或 store）
+    // 检查是否有路由数据（从本地存储或store）
     const hasRouteData = (userStore.menuRoutes && userStore.menuRoutes.length > 0) || 
                          (localStorage.getItem('menuRoutes') && localStorage.getItem('menuRoutes') !== '[]')
     
@@ -330,7 +334,7 @@ router.beforeEach(async (to, _from, next) => {
         // 优先使用 store 中已有的路由数据
         let routes = userStore.menuRoutes
         
-        // 如果 store 中没有，尝试从 localStorage 恢复
+        // 如果 store 中没有，尝试从本地存储恢复
         if ((!routes || routes.length === 0) && hasRouteData) {
           try {
             const storedRoutes = localStorage.getItem('menuRoutes')
@@ -339,7 +343,7 @@ router.beforeEach(async (to, _from, next) => {
               userStore.setMenuRoutes(routes)
             }
           } catch (e) {
-            console.error('从 localStorage 恢复路由失败:', e)
+            console.error('从本地存储恢复路由失败:', e)
           }
         }
         
@@ -368,7 +372,7 @@ router.beforeEach(async (to, _from, next) => {
           if (routes && Array.isArray(routes)) {
             // 将路由数据存储到 store 中
             userStore.setMenuRoutes(routes)
-            // 同时保存到 localStorage
+            // 同时保存到本地存储
             localStorage.setItem('menuRoutes', JSON.stringify(routes))
           }
         }
@@ -420,7 +424,7 @@ router.beforeEach(async (to, _from, next) => {
               userStore.setMenuRoutes(routes)
             }
           } catch (e) {
-            console.error('从 localStorage 恢复路由失败:', e)
+            console.error('从本地存储恢复路由失败:', e)
           }
         }
         
