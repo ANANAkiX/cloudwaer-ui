@@ -734,10 +734,9 @@ const getNodeActions = () => {
 
 // 获取事件类型
 const getEventType = (elementType: string) => {
-  if (elementType.includes('StartEvent')) return 'start'
-  if (elementType.includes('EndEvent')) return 'end'
-  if (elementType.includes('IntermediateEvent')) return 'intermediate'
-  return 'task'
+  if (elementType.includes('StartEvent')) return 'process_start'
+  if (elementType.includes('EndEvent')) return 'process_end'
+  return 'task_create'
 }
 
 // 获取动作类型

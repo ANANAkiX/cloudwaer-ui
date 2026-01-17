@@ -795,9 +795,11 @@ const formatXml = (xml: string) => {
 const getHistoryType = (type: string) => {
   switch (type) {
     case 'start': return 'primary'
+    case 'wait': return 'info'
     case 'complete': return 'success'
     case 'approve': return 'success'
     case 'reject': return 'danger'
+    case 'end': return 'info'
     default: return 'info'
   }
 }

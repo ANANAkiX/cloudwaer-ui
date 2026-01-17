@@ -77,6 +77,7 @@ export interface FlowableTaskItem {
   taskDefinitionKey?: string
   processInstanceId?: string
   processDefinitionKey?: string
+  businessKey?: string
   assignee?: string
   createTime?: string
   endTime?: string

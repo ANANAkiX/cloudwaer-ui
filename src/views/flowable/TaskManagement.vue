@@ -471,7 +471,8 @@ import {
   getDoneTasksByPage, 
   claimFlowableTask, 
   completeFlowableTask,
-  getFlowableTaskDetail
+  getFlowableTaskDetail,
+  getProcessVariables
 } from '@/api/flowable'
 
 // 任务表单字段接口
@@ -659,18 +660,6 @@ const openCompleteDialog = (task: FlowableTaskItem) => {
         { label: '同意', value: 'approve' },
         { label: '拒绝', value: 'reject' }
       ]
-    },
-    {
-      id: 'nextAssignee',
-      label: '下一步处理人',
-      type: 'select',
-      required: true,
-      placeholder: '请选择下一步处理人',
-      options: [
-        { label: '张三', value: 'zhangsan' },
-        { label: '李四', value: 'lisi' },
-        { label: '王五', value: 'wangwu' }
-      ]
     }
   ]
   
@@ -745,14 +734,13 @@ const claimTask = async (task: FlowableTaskItem) => {
 const viewTaskDetail = async (task: FlowableTaskItem) => {
   try {
     currentTask.value = await getFlowableTaskDetail(task.id)
-    
-    // 模拟流程变量
-    processVariables.value = [
-      { name: 'applicant', type: 'string', value: '张三' },
-      { name: 'leaveType', type: 'string', value: '事假' },
-      { name: 'leaveDays', type: 'number', value: 3 },
-      { name: 'approved', type: 'boolean', value: false }
-    ]
+
+    processVariables.value = []
+    const processInstanceId =
+      currentTask.value?.processInstanceId || task.processInstanceId
+    if (processInstanceId) {
+      processVariables.value = await getProcessVariables(processInstanceId)
+    }
     
     detailDialogVisible.value = true
   } catch (error) {
@@ -822,7 +810,7 @@ const getPriorityType = (priority?: number) => {
     case 1: return 'danger'
     case 2: return 'warning'
     case 3: return 'primary'
-    default: return ''
+    default: return 'info'
   }
 }
 
