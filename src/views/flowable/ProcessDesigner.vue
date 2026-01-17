@@ -1,7 +1,7 @@
 <template>
-  <div class="process-designer">
+  <div class="process-designer" :class="{ 'no-selection': !selectedElement }">
     <el-card>
-      <template #header>
+      <template #header v-if="!embedded">
         <div class="card-header">
           <span>流程设计器</span>
           <div class="header-actions">
@@ -22,7 +22,7 @@
       </template>
 
       <!-- 模型信息 -->
-      <div class="model-info">
+      <div class="model-info" v-if="!embedded">
         <el-form :model="modelInfo" label-width="100px" size="small">
           <el-row :gutter="20">
             <el-col :span="8">
@@ -65,8 +65,8 @@
       </div>
 
       <!-- 属性面板 -->
-      <div class="properties-panel" v-if="selectedElement">
-        <el-card>
+      <div class="properties-panel" :class="{ 'is-hidden': !selectedElement }">
+        <el-card v-if="selectedElement">
           <template #header>
             <span>节点属性</span>
           </template>
@@ -137,7 +137,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, onUnmounted, nextTick, computed } from 'vue'
+import { ref, reactive, onMounted, onUnmounted, nextTick, computed, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Document, Upload, View } from '@element-plus/icons-vue'
 import BpmnModeler from 'bpmn-js/lib/Modeler'
@@ -151,8 +151,18 @@ import customTranslate from './bpmn/translate'
 const customTranslateModule = {
   translate: ['value', customTranslate]
 }
-import type { FlowableModelDetail } from '@/api/flowable'
+import type { FlowableModelDetail, FlowableNodeAction } from '@/api/flowable'
 import { saveFlowableModel, publishFlowableModel } from '@/api/flowable'
+
+const props = withDefaults(defineProps<{
+  embedded?: boolean
+  modelInfo?: Partial<FlowableModelDetail>
+  initialBpmnXml?: string
+}>(), {
+  embedded: false,
+  modelInfo: () => ({}),
+  initialBpmnXml: ''
+})
 
 // 响应式数据
 const canvasRef = ref<HTMLElement>()
@@ -171,7 +181,7 @@ const modelInfo = reactive({
   modelName: '',
   category: '',
   remark: '',
-  isExecutable: false
+  isExecutable: true
 })
 
 // 选中元素属性
@@ -255,6 +265,27 @@ const parseListenerConfigFromBusinessObject = (
   }
 }
 
+const applyIncomingModelInfo = (incoming?: Partial<FlowableModelDetail>) => {
+  if (!incoming) return
+  Object.assign(modelInfo, {
+    id: incoming.id ?? modelInfo.id,
+    modelKey: incoming.modelKey ?? modelInfo.modelKey,
+    modelName: incoming.modelName ?? modelInfo.modelName,
+    category: incoming.category ?? modelInfo.category,
+    remark: incoming.remark ?? modelInfo.remark,
+    isExecutable: incoming.isExecutable ?? modelInfo.isExecutable
+  })
+}
+
+const loadDiagram = async (xml?: string) => {
+  if (!modeler) return
+  if (xml && xml.trim()) {
+    await modeler.importXML(xml)
+  } else {
+    await modeler.createDiagram()
+  }
+}
+
 // 方法
 const initModeler = async () => {
   console.log('开始初始化流程设计器...')
@@ -277,9 +308,8 @@ const initModeler = async () => {
 
     console.log('BpmnModeler 实例创建成功')
 
-    // 直接创建空白画布
-    await modeler.createDiagram()
-    console.log('空白画布创建成功')
+    await loadDiagram(props.initialBpmnXml)
+    console.log('画布加载完成')
 
     // 监听选择事件
     modeler.on('selection.changed', (event: any) => {
@@ -773,6 +803,39 @@ const getActionConfig = (element: any) => {
   return JSON.stringify(config)
 }
 
+const buildBpmnXml = async () => {
+  if (!modeler) return ''
+
+  const { xml } = await modeler.saveXML({ format: true })
+
+  let updatedXml = xml
+  try {
+    const parser = new DOMParser()
+    const xmlDoc = parser.parseFromString(xml, 'text/xml')
+
+    const processElements = xmlDoc.getElementsByTagName('bpmn:process')
+    if (processElements.length > 0) {
+      const processElement = processElements[0] as Element
+      if (modelInfo.modelKey) {
+        processElement.setAttribute('id', modelInfo.modelKey)
+      }
+      if (modelInfo.modelName) {
+        processElement.setAttribute('name', modelInfo.modelName)
+      }
+      processElement.setAttribute('isExecutable', modelInfo.isExecutable.toString())
+    }
+
+    addListenerConfigToXml(xmlDoc)
+
+    const serializer = new XMLSerializer()
+    updatedXml = serializer.serializeToString(xmlDoc)
+  } catch (xmlError) {
+    console.warn('修改XML失败，使用原始XML:', xmlError)
+  }
+
+  return updatedXml
+}
+
 const saveModel = async () => {
   if (!modeler) return
 
@@ -788,38 +851,7 @@ const saveModel = async () => {
 
     saveLoading.value = true
 
-    // 获取当前XML
-    const { xml } = await modeler.saveXML({ format: true })
-    
-    // 修改XML中的bpmn:process的id为modelKey和isExecutable属性，并添加监听器配置
-    let updatedXml = xml
-    try {
-      // 使用DOM解析器修改XML
-      const parser = new DOMParser()
-      const xmlDoc = parser.parseFromString(xml, 'text/xml')
-      
-      // 查找bpmn:process元素
-      const processElements = xmlDoc.getElementsByTagName('bpmn:process')
-      if (processElements.length > 0) {
-        const processElement = processElements[0] as Element
-        processElement.setAttribute('id', modelInfo.modelKey)
-        processElement.setAttribute('isExecutable', modelInfo.isExecutable.toString())
-      }
-      
-      // 添加监听器配置到各个节点
-      addListenerConfigToXml(xmlDoc)
-      
-      // 重新序列化XML
-      const serializer = new XMLSerializer()
-      updatedXml = serializer.serializeToString(xmlDoc)
-      
-      // 输出完整XML用于调试
-      console.log('=== 最终生成的XML ===')
-      console.log(updatedXml)
-      console.log('=== XML结束 ===')
-    } catch (xmlError) {
-      console.warn('修改XML失败，使用原始XML:', xmlError)
-    }
+    const updatedXml = await buildBpmnXml()
 
     // 获取节点数据
     const nodeActions = getNodeActions()
@@ -856,7 +888,7 @@ const publishModel = async () => {
 
     publishLoading.value = true
 
-    const { xml } = await modeler.saveXML({ format: true })
+    const xml = await buildBpmnXml()
 
     const modelData: FlowableModelDetail = {
       ...modelInfo,
@@ -875,6 +907,14 @@ const publishModel = async () => {
     publishLoading.value = false
   }
 }
+
+const getModelPayload = async (): Promise<{ bpmnXml: string; nodeActions: FlowableNodeAction[] }> => {
+  const bpmnXml = await buildBpmnXml()
+  const nodeActions = getNodeActions()
+  return { bpmnXml, nodeActions }
+}
+
+defineExpose({ getModelPayload })
 
 const previewProcess = async () => {
   if (!modeler) return
@@ -925,12 +965,22 @@ onMounted(async () => {
   }
   
   try {
+    applyIncomingModelInfo(props.modelInfo)
     await initModeler()
     console.log('流程设计器初始化成功')
   } catch (error) {
     console.error('流程设计器初始化失败:', error)
     ElMessage.error('流程设计器初始化失败')
   }
+})
+
+watch(() => props.modelInfo, (value) => {
+  applyIncomingModelInfo(value)
+}, { deep: true })
+
+watch(() => props.initialBpmnXml, async (value) => {
+  if (!modeler) return
+  await loadDiagram(value)
 })
 
 onUnmounted(() => {
@@ -981,10 +1031,16 @@ onUnmounted(() => {
   
   .properties-panel {
     margin-top: 20px;
+    min-height: 220px;
     
     .el-card {
       max-width: 400px;
     }
+  }
+
+  .properties-panel.is-hidden {
+    visibility: hidden;
+    pointer-events: none;
   }
   
   .preview-canvas {

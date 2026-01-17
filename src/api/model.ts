@@ -23,6 +23,7 @@ export interface FlowableModelDetail {
   version: number
   modelStatus: number
   bpmnXml: string
+  nodeActions?: any[]
   nodeActionsJson?: string
   remark?: string
   createTime?: string
@@ -54,6 +55,15 @@ export function getModelList(params: PageParams): Promise<PageResult<FlowableMod
   })
 }
 
+// 获取模型版本列表
+export function getModelVersions(modelKey: string): Promise<FlowableModelListItem[]> {
+  return request({
+    url: '/flowable/model/versions',
+    method: 'get',
+    params: { modelKey }
+  })
+}
+
 // 获取模型详情
 export function getModelDetail(id: number): Promise<FlowableModelDetail> {
   return request({
@@ -76,6 +86,15 @@ export function saveModel(data: ModelSaveDTO): Promise<number> {
 export function publishModel(data: ModelPublishDTO): Promise<boolean> {
   return request({
     url: '/flowable/model/publish',
+    method: 'post',
+    data
+  })
+}
+
+// 回退模型版本（生成新草稿版本）
+export function rollbackModel(data: { modelKey: string; version: number }): Promise<boolean> {
+  return request({
+    url: '/flowable/model/rollback',
     method: 'post',
     data
   })

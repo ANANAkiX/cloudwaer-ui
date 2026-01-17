@@ -60,7 +60,7 @@
               <el-card class="stat-card archived">
                 <div class="stat-content">
                   <div class="stat-number">{{ stats.archived }}</div>
-                  <div class="stat-label">已归档</div>
+                  <div class="stat-label">已更新</div>
                 </div>
                 <el-icon class="stat-icon"><FolderOpened /></el-icon>
               </el-card>
@@ -135,7 +135,7 @@
           <template #default="scope">
             <el-tag v-if="scope.row.modelStatus === 0" type="info">草稿</el-tag>
             <el-tag v-else-if="scope.row.modelStatus === 1" type="success">已发布</el-tag>
-            <el-tag v-else-if="scope.row.modelStatus === 2" type="warning">已归档</el-tag>
+            <el-tag v-else-if="scope.row.modelStatus === 2" type="warning">已更新</el-tag>
             <span v-else>-</span>
           </template>
         </el-table-column>
@@ -154,10 +154,6 @@
               <el-button size="small" type="warning" @click="handlePublish(scope.row)">
                 <el-icon><Upload /></el-icon>
                 发布
-              </el-button>
-              <el-button size="small" type="success" @click="openStartDialog(scope.row)">
-                <el-icon><VideoPlay /></el-icon>
-                启动
               </el-button>
               <el-dropdown @command="(command) => handleMoreAction(command, scope.row)">
                 <el-button size="small">
@@ -213,7 +209,6 @@
                   <el-button-group>
                     <el-button size="small" type="primary" @click="handleEdit(item)">编辑</el-button>
                     <el-button size="small" type="warning" @click="handlePublish(item)">发布</el-button>
-                    <el-button size="small" type="success" @click="openStartDialog(item)">启动</el-button>
                   </el-button-group>
                 </div>
               </div>
@@ -240,7 +235,7 @@
     <el-dialog
       v-model="dialogVisible"
       :title="dialogTitle"
-      width="600px"
+      width="720px"
       :close-on-click-modal="false"
     >
       <el-form
@@ -267,6 +262,12 @@
             <el-option label="其他" value="other" />
           </el-select>
         </el-form-item>
+        <el-form-item label="是否可执行" prop="isExecutable">
+          <el-select v-model="formData.isExecutable" placeholder="请选择" style="width: 100%">
+            <el-option label="是" :value="true" />
+            <el-option label="否" :value="false" />
+          </el-select>
+        </el-form-item>
         <el-form-item label="描述" prop="remark">
           <el-input 
             v-model="formData.remark" 
@@ -275,10 +276,36 @@
             placeholder="请输入模型描述"
           />
         </el-form-item>
+        <el-form-item label="BPMN设计">
+          <el-button type="primary" @click="openDesignerDialog">打开设计器</el-button>
+          <el-tag v-if="formData.bpmnXml" type="success" size="small" style="margin-left: 8px">
+            已编辑
+          </el-tag>
+        </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
         <el-button type="primary" @click="handleSave" :loading="saveLoading">保存</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- BPMN设计器对话框 -->
+    <el-dialog
+      v-model="designerDialogVisible"
+      title="BPMN设计"
+      width="90%"
+      :close-on-click-modal="false"
+      top="5vh"
+    >
+      <ProcessDesigner
+        ref="designerRef"
+        :embedded="true"
+        :model-info="formData"
+        :initial-bpmn-xml="formData.bpmnXml || ''"
+      />
+      <template #footer>
+        <el-button @click="designerDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="confirmDesigner">确认</el-button>
       </template>
     </el-dialog>
 
@@ -315,6 +342,52 @@
       </template>
     </el-dialog>
 
+    <!-- 版本历史对话框 -->
+    <el-dialog
+      v-model="historyDialogVisible"
+      :title="historyTitle"
+      width="840px"
+      :close-on-click-modal="false"
+    >
+      <div class="history-header" v-if="historyModel">
+        <div>模型Key：{{ historyModel.modelKey }}</div>
+      </div>
+      <el-table :data="historyList" v-loading="historyLoading" border style="width: 100%">
+        <el-table-column prop="version" label="版本" width="80" align="center">
+          <template #default="scope">
+            v{{ scope.row.version }}
+          </template>
+        </el-table-column>
+        <el-table-column prop="modelStatus" label="状态" width="120" align="center">
+          <template #default="scope">
+            <el-tag :type="getStatusType(scope.row.modelStatus)">
+              {{ getStatusText(scope.row.modelStatus) }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="remark" label="描述" min-width="200">
+          <template #default="scope">
+            <span>{{ scope.row.remark || '-' }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="updateTime" label="更新时间" min-width="180">
+          <template #default="scope">
+            <span>{{ formatTime(scope.row.updateTime) }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="140" align="center">
+          <template #default="scope">
+            <el-button size="small" type="primary" @click="handleRollbackVersion(scope.row)">
+              回退到此版本
+            </el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+      <template #footer>
+        <el-button @click="historyDialogVisible = false">关闭</el-button>
+      </template>
+    </el-dialog>
+
     <!-- 批量操作栏 -->
     <div v-if="selectedRows.length > 0" class="batch-actions">
       <el-card>
@@ -341,22 +414,31 @@ import {
 import type { FlowableModelListItem, FlowableModelDetail } from '@/api/model'
 import {
   getModelList,
+  getModelVersions,
   saveModel,
   deleteModel,
   publishModel,
-  getBpmnXml
+  getModelDetail,
+  rollbackModel
 } from '@/api/model'
 import { startFlowableProcess } from '@/api/flowable'
+import ProcessDesigner from '@/views/flowable/ProcessDesigner.vue'
 
 // 响应式数据
 const loading = ref(false)
 const saveLoading = ref(false)
 const startLoading = ref(false)
 const dialogVisible = ref(false)
+const designerDialogVisible = ref(false)
 const startDialogVisible = ref(false)
+const historyDialogVisible = ref(false)
+const historyLoading = ref(false)
 const viewMode = ref<'table' | 'card'>('table')
 const searchKeyword = ref('')
 const selectedRows = ref<FlowableModelListItem[]>([])
+
+const historyList = ref<FlowableModelListItem[]>([])
+const historyModel = ref<FlowableModelListItem | null>(null)
 
 // 分页参数
 const pageParams = reactive({
@@ -378,11 +460,15 @@ const stats = reactive({
 })
 
 // 表单数据
-const formData = reactive<Partial<FlowableModelDetail>>({
+type ModelFormData = Partial<FlowableModelDetail & { nodeActions?: any[]; isExecutable?: boolean }>
+
+const formData = reactive<ModelFormData>({
   modelKey: '',
   modelName: '',
   category: '',
-  remark: ''
+  remark: '',
+  isExecutable: true,
+  bpmnXml: ''
 })
 
 // 启动流程表单
@@ -394,16 +480,20 @@ const startFormData = reactive({
 
 // 表单引用
 const formRef = ref()
+const designerRef = ref<InstanceType<typeof ProcessDesigner> | null>(null)
 const startFormRef = ref()
 
 // 表单验证规则
 const formRules = {
   modelKey: [
     { required: true, message: '请输入模型Key', trigger: 'blur' },
-    { pattern: /^[a-zA-Z][a-zA-Z0-9_]*$/, message: '模型Key必须以字母开头，只能包含字母、数字和下划线', trigger: 'blur' }
+    { pattern: /^[A-Za-z0-9_@.-]+$/, message: '模型Key只能包含字母、数字、_、-、@、.', trigger: 'blur' }
   ],
   modelName: [
     { required: true, message: '请输入模型名称', trigger: 'blur' }
+  ],
+  isExecutable: [
+    { required: true, message: '请选择是否可执行', trigger: 'change' }
   ]
 }
 
@@ -416,6 +506,11 @@ const startFormRules = {
 // 计算属性
 const dialogTitle = computed(() => {
   return formData.id ? '编辑模型' : '新增模型'
+})
+
+const historyTitle = computed(() => {
+  if (!historyModel.value) return '版本历史'
+  return `版本历史 - ${historyModel.value.modelName}`
 })
 
 // 方法
@@ -450,6 +545,58 @@ const updateStats = (data: FlowableModelListItem[]) => {
   stats.archived = data.filter(item => item.modelStatus === 2).length
 }
 
+const parseIsExecutableFromXml = (xml?: string) => {
+  if (!xml) return null
+  try {
+    const parser = new DOMParser()
+    const doc = parser.parseFromString(xml, 'text/xml')
+    const process =
+      doc.getElementsByTagName('bpmn:process')[0] ||
+      doc.getElementsByTagName('process')[0]
+    if (!process) return null
+    const value = process.getAttribute('isExecutable')
+    if (value === null) return null
+    return value === 'true'
+  } catch (error) {
+    console.error('解析BPMN isExecutable失败:', error)
+    return null
+  }
+}
+
+const normalizeProcessExecutableAttribute = (xml: string, isExecutable: boolean) => {
+  return xml.replace(/<(bpmn:)?process\b[^>]*>/, (match) => {
+    const cleaned = match.replace(/\s+isExecutable="[^"]*"/g, '')
+    return cleaned.replace(/>$/, ` isExecutable="${isExecutable}">`)
+  })
+}
+
+const applyProcessMetaToXml = (xml: string, meta: { modelKey?: string; modelName?: string; isExecutable?: boolean }) => {
+  if (!xml) return xml
+  try {
+    const parser = new DOMParser()
+    const doc = parser.parseFromString(xml, 'text/xml')
+    const process =
+      doc.getElementsByTagName('bpmn:process')[0] ||
+      doc.getElementsByTagName('process')[0]
+    if (process) {
+      if (meta.modelKey) {
+        process.setAttribute('id', meta.modelKey)
+      }
+      if (meta.modelName) {
+        process.setAttribute('name', meta.modelName)
+      }
+      const isExecutable = meta.isExecutable !== undefined ? meta.isExecutable : true
+      process.setAttribute('isExecutable', String(isExecutable))
+    }
+    const serializer = new XMLSerializer()
+    const serialized = serializer.serializeToString(doc)
+    return normalizeProcessExecutableAttribute(serialized, isExecutable)
+  } catch (error) {
+    console.error('更新BPMN元信息失败:', error)
+    return xml
+  }
+}
+
 const handleSearch = () => {
   pageParams.current = 1
   loadData()
@@ -461,13 +608,30 @@ const handleAdd = () => {
     modelKey: '',
     modelName: '',
     category: '',
-    remark: ''
+    remark: '',
+    isExecutable: true,
+    bpmnXml: '',
+    nodeActions: []
   })
   dialogVisible.value = true
 }
 
-const handleEdit = (row: FlowableModelListItem) => {
-  Object.assign(formData, row)
+const handleEdit = async (row: FlowableModelListItem) => {
+  Object.assign(formData, row, {
+    isExecutable: true
+  })
+  try {
+    const detail = await getModelDetail(row.id as number)
+    formData.bpmnXml = detail.bpmnXml
+    formData.nodeActions = detail.nodeActions || []
+    formData.remark = detail.remark ?? (detail as any).remake ?? formData.remark
+    const parsedExecutable = parseIsExecutableFromXml(detail.bpmnXml)
+    if (parsedExecutable !== null) {
+      formData.isExecutable = parsedExecutable
+    }
+  } catch (error) {
+    console.error('加载模型详情失败:', error)
+  }
   dialogVisible.value = true
 }
 
@@ -475,7 +639,19 @@ const handleSave = async () => {
   try {
     await formRef.value.validate()
     saveLoading.value = true
-    
+
+    if (!formData.bpmnXml) {
+      ElMessage.warning('请先完成BPMN设计')
+      saveLoading.value = false
+      return
+    }
+
+    formData.bpmnXml = applyProcessMetaToXml(formData.bpmnXml, {
+      modelKey: formData.modelKey,
+      modelName: formData.modelName,
+      isExecutable: formData.isExecutable
+    })
+
     await saveModel(formData as any)
     ElMessage.success('保存成功')
     dialogVisible.value = false
@@ -486,6 +662,25 @@ const handleSave = async () => {
   } finally {
     saveLoading.value = false
   }
+}
+
+const openDesignerDialog = () => {
+  if (!formData.modelKey || !formData.modelName) {
+    ElMessage.warning('请先填写模型Key和模型名称')
+    return
+  }
+  designerDialogVisible.value = true
+}
+
+const confirmDesigner = async () => {
+  if (!designerRef.value?.getModelPayload) {
+    ElMessage.error('设计器未准备好')
+    return
+  }
+  const payload = await designerRef.value.getModelPayload()
+  formData.bpmnXml = payload.bpmnXml
+  formData.nodeActions = payload.nodeActions
+  designerDialogVisible.value = false
 }
 
 const handlePublish = async (row: FlowableModelListItem) => {
@@ -526,12 +721,6 @@ const handleDelete = async (row: FlowableModelListItem) => {
   }
 }
 
-const openStartDialog = (row: FlowableModelListItem) => {
-  startFormData.processDefinitionKey = row.modelKey
-  startFormData.businessKey = ''
-  startFormData.variables = []
-  startDialogVisible.value = true
-}
 
 const handleStartProcess = async () => {
   try {
@@ -602,8 +791,42 @@ const handleExport = (row: FlowableModelListItem) => {
 }
 
 const handleHistory = (row: FlowableModelListItem) => {
-  // TODO: 实现版本历史功能
-  ElMessage.info('版本历史功能开发中...')
+  historyModel.value = row
+  historyDialogVisible.value = true
+  loadHistoryVersions(row.modelKey)
+}
+
+const loadHistoryVersions = async (modelKey: string) => {
+  try {
+    historyLoading.value = true
+    historyList.value = await getModelVersions(modelKey)
+  } catch (error) {
+    console.error('加载版本历史失败:', error)
+    ElMessage.error('加载版本历史失败')
+    historyList.value = []
+  } finally {
+    historyLoading.value = false
+  }
+}
+
+const handleRollbackVersion = async (row: FlowableModelListItem) => {
+  try {
+    await ElMessageBox.confirm(`确定要基于版本 v${row.version} 创建新版本吗？`, '提示', {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
+
+    await rollbackModel({ modelKey: row.modelKey, version: row.version })
+    ElMessage.success('已基于该版本生成新草稿')
+    await loadHistoryVersions(row.modelKey)
+    loadData()
+  } catch (error) {
+    if (error !== 'cancel') {
+      console.error('版本回退失败:', error)
+      ElMessage.error('版本回退失败')
+    }
+  }
 }
 
 const handleBatchImport = () => {
@@ -687,7 +910,7 @@ const getStatusText = (status: number) => {
   switch (status) {
     case 0: return '草稿'
     case 1: return '已发布'
-    case 2: return '已归档'
+    case 2: return '已更新'
     default: return '-'
   }
 }
@@ -810,11 +1033,16 @@ onMounted(() => {
       }
     }
     
-    .pagination {
-      margin-top: 20px;
-      text-align: right;
-    }
+  .pagination {
+    margin-top: 20px;
+    text-align: right;
   }
+
+  .history-header {
+    margin-bottom: 12px;
+    color: #606266;
+  }
+}
   
   .batch-actions {
     position: fixed;

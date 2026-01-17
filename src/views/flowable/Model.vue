@@ -28,7 +28,7 @@
           <template #default="scope">
             <el-tag v-if="scope.row.modelStatus === 0" type="info">草稿</el-tag>
             <el-tag v-else-if="scope.row.modelStatus === 1" type="success">已发布</el-tag>
-            <el-tag v-else-if="scope.row.modelStatus === 2" type="warning">已归档</el-tag>
+            <el-tag v-else-if="scope.row.modelStatus === 2" type="warning">已更新</el-tag>
             <span v-else>-</span>
           </template>
         </el-table-column>
