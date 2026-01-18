@@ -47,7 +47,14 @@
           <el-row :gutter="20">
             <el-col :span="8">
               <el-form-item label="分类">
-                <el-input v-model="modelInfo.category" placeholder="请输入分类" />
+                <DictSelect
+                  v-model="modelInfo.category"
+                  type="flowable_type"
+                  valueField="value"
+                  labelField="label"
+                  placeholder="请选择流程类型"
+                  style="width: 100%"
+                />
               </el-form-item>
             </el-col>
             <el-col :span="16">
@@ -140,6 +147,7 @@
 import { ref, reactive, onMounted, onUnmounted, nextTick, computed, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Document, Upload, View } from '@element-plus/icons-vue'
+import DictSelect from '@/components/DictSelect.vue'
 import BpmnModeler from 'bpmn-js/lib/Modeler'
 import 'bpmn-js/dist/assets/diagram-js.css'
 import 'bpmn-js/dist/assets/bpmn-font/css/bpmn-embedded.css'

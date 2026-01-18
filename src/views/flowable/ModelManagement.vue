@@ -255,12 +255,14 @@
           <el-input v-model="formData.modelName" placeholder="请输入模型名称" />
         </el-form-item>
         <el-form-item label="分类" prop="category">
-          <el-select v-model="formData.category" placeholder="请选择分类" style="width: 100%">
-            <el-option label="请假流程" value="leave" />
-            <el-option label="报销流程" value="expense" />
-            <el-option label="审批流程" value="approval" />
-            <el-option label="其他" value="other" />
-          </el-select>
+          <DictSelect
+            v-model="formData.category"
+            type="flowable_type"
+            valueField="value"
+            labelField="label"
+            placeholder="请选择类型"
+            style="width: 100%"
+          />
         </el-form-item>
         <el-form-item label="是否可执行" prop="isExecutable">
           <el-select v-model="formData.isExecutable" placeholder="请选择" style="width: 100%">
@@ -424,6 +426,7 @@ import {
 import { startFlowableProcess } from '@/api/flowable'
 import ProcessDesigner from '@/views/flowable/ProcessDesigner.vue'
 
+import DictSelect from '@/components/DictSelect.vue'
 // 响应式数据
 const loading = ref(false)
 const saveLoading = ref(false)

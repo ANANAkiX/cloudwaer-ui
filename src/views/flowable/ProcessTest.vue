@@ -28,7 +28,14 @@
               <el-input v-model="testData.model.modelKey" placeholder="输入模型Key" />
             </el-form-item>
             <el-form-item label="分类">
-              <el-input v-model="testData.model.category" placeholder="输入分类" />
+              <DictSelect
+                v-model="testData.model.category"
+                type="flowable_type"
+                valueField="value"
+                labelField="label"
+                placeholder="请选择流程类型"
+                style="width: 100%"
+              />
             </el-form-item>
           </el-form>
           
@@ -83,7 +90,14 @@
               <el-input v-model="testData.deployment.deploymentName" placeholder="输入部署名称" />
             </el-form-item>
             <el-form-item label="分类">
-              <el-input v-model="testData.deployment.category" placeholder="输入分类" />
+              <DictSelect
+                v-model="testData.deployment.category"
+                type="flowable_type"
+                valueField="value"
+                labelField="label"
+                placeholder="请选择流程类型"
+                style="width: 100%"
+              />
             </el-form-item>
           </el-form>
           
@@ -202,6 +216,7 @@
 <script setup lang="ts">
 import { ref, reactive } from 'vue'
 import { ElMessage } from 'element-plus'
+import DictSelect from '@/components/DictSelect.vue'
 import NodeActionConfig from '@/components/flowable/NodeActionConfig.vue'
 import { 
   deployBpmnWithActions, 

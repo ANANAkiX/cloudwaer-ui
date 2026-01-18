@@ -26,10 +26,12 @@
       <div class="category-tabs">
         <el-tabs v-model="activeCategory" @tab-change="handleCategoryChange">
           <el-tab-pane label="全部" name="all" />
-          <el-tab-pane label="请假流程" name="leave" />
-          <el-tab-pane label="报销流程" name="expense" />
-          <el-tab-pane label="审批流程" name="approval" />
-          <el-tab-pane label="其他" name="other" />
+          <el-tab-pane
+            v-for="item in flowableTypeOptions"
+            :key="getFlowableTypeValue(item) || String(item.id)"
+            :label="getFlowableTypeLabel(item)"
+            :name="getFlowableTypeValue(item)"
+          />
         </el-tabs>
       </div>
 
@@ -90,7 +92,7 @@
     <!-- 申请流程对话框 -->
     <el-dialog
       v-model="applicationDialogVisible"
-      :title="`申请${currentProcess?.processName || ''}`"
+      :title="`申请${currentProcessName}`"
       width="800px"
       :close-on-click-modal="false"
     >
@@ -329,6 +331,7 @@ import {
 } from '@element-plus/icons-vue'
 import { startFlowableProcess, getProcessDefinitions, getProcessDefinitionDetail } from '@/api/flowable'
 import type { FlowableProcessDefinition, FormField } from '@/api/flowable'
+import { useDict } from '@/utils/dict'
 
 // 响应式数据
 const loading = ref(false)
@@ -338,7 +341,13 @@ const detailDialogVisible = ref(false)
 const activeCategory = ref('all')
 const searchKeyword = ref('')
 const currentProcess = ref<FlowableProcessDefinition | null>(null)
+const currentProcessName = computed(() => {
+  if (!currentProcess.value) return ''
+  return currentProcess.value.processName || ''
+})
 const attachments = ref<any[]>([])
+const { dicts } = useDict(['flowable_type'])
+const flowableTypeOptions = computed(() => dicts.value.flowable_type || [])
 
 // 分页参数
 const pageParams = reactive({
@@ -516,18 +525,28 @@ const getProcessIcon = (category: string) => {
     case 'leave': return Document
     case 'expense': return Money
     case 'approval': return Setting
+    case 'ea': return Setting
     default: return More
   }
 }
 
+const getFlowableTypeValue = (item: any) => {
+  if (!item) return ''
+  const value = item.value != null ? item.value : (item.code != null ? item.code : item.id)
+  return value == null ? '' : String(value)
+}
+
+const getFlowableTypeLabel = (item: any) => {
+  if (!item) return ''
+  if (item.label != null && String(item.label) !== '') return String(item.label)
+  if (item.value != null && String(item.value) !== '') return String(item.value)
+  if (item.code != null && String(item.code) !== '') return String(item.code)
+  return ''
+}
+
 const getCategoryText = (category: string) => {
-  switch (category) {
-    case 'leave': return '请假流程'
-    case 'expense': return '报销流程'
-    case 'approval': return '审批流程'
-    case 'other': return '其他'
-    default: return '未分类'
-  }
+  const hit = flowableTypeOptions.value.find(item => getFlowableTypeValue(item) === String(category))
+  return hit ? getFlowableTypeLabel(hit) : '未分类'
 }
 
 const handleUploadSuccess = (response: any, fieldId: string) => {
