@@ -83,15 +83,15 @@
           <span>流程实例</span>
           <div class="header-actions">
             <el-button-group>
-              <el-button 
-                :type="viewMode === 'table' ? 'primary' : ''" 
+              <el-button
+                :type="viewMode === 'table' ? 'primary' : ''"
                 @click="viewMode = 'table'"
               >
                 <el-icon><List /></el-icon>
                 列表视图
               </el-button>
-              <el-button 
-                :type="viewMode === 'timeline' ? 'primary' : ''" 
+              <el-button
+                :type="viewMode === 'timeline' ? 'primary' : ''"
                 @click="viewMode = 'timeline'"
               >
                 <el-icon><Clock /></el-icon>
@@ -103,12 +103,12 @@
       </template>
 
       <!-- 表格视图 -->
-      <el-table 
+      <el-table
         v-if="viewMode === 'table'"
-        :data="tableData" 
-        border 
-        style="width: 100%" 
-        v-loading="loading" 
+        :data="tableData"
+        border
+        style="width: 100%"
+        v-loading="loading"
         table-layout="fixed"
         @selection-change="handleSelectionChange"
       >
@@ -168,28 +168,28 @@
                 <el-icon><View /></el-icon>
                 详情
               </el-button>
-              <el-button 
+              <el-button
                 v-if="scope.row.status === 'running'"
-                size="small" 
-                type="warning" 
+                size="small"
+                type="warning"
                 @click="suspendInstance(scope.row)"
               >
                 <el-icon><VideoPause /></el-icon>
                 挂起
               </el-button>
-              <el-button 
+              <el-button
                 v-if="scope.row.status === 'suspended'"
-                size="small" 
-                type="success" 
+                size="small"
+                type="success"
                 @click="activateInstance(scope.row)"
               >
                 <el-icon><VideoPlay /></el-icon>
                 激活
               </el-button>
-              <el-button 
+              <el-button
                 v-if="scope.row.status === 'running'"
-                size="small" 
-                type="danger" 
+                size="small"
+                type="danger"
                 @click="terminateInstance(scope.row)"
               >
                 <el-icon><CircleClose /></el-icon>
@@ -327,30 +327,30 @@
               </el-descriptions-item>
             </el-descriptions>
           </el-tab-pane>
-          
+
           <!-- 流程图 -->
           <el-tab-pane label="流程图" name="diagram">
             <div class="process-diagram">
               <!-- 如果是SVG格式，直接渲染 -->
-              <div 
+              <div
                 v-if="processDiagram && processDiagram.includes('<svg')"
                 style="width: 100%; height: 600px; overflow: auto; border: 1px solid #ddd; background: white;"
               >
                 <div v-html="processDiagram"></div>
               </div>
-              
+
               <!-- 如果是BPMN XML，显示格式化的XML -->
-              <pre 
+              <pre
                 v-else-if="processDiagram && (processDiagram.includes('<bpmn:definitions') || processDiagram.includes('<definitions'))"
                 class="bpmn-xml"
               >{{ formatXml(processDiagram) }}</pre>
-              
+
               <!-- 显示原始内容用于调试 -->
-              <pre 
+              <pre
                 v-else-if="processDiagram"
                 style="background: #f0f0f0; padding: 10px; font-size: 12px; max-height: 200px; overflow: auto;"
               >{{ processDiagram.substring(0, 1000) }}{{ processDiagram.length > 1000 ? '...' : '' }}</pre>
-              
+
               <!-- 无流程图时显示占位符 -->
               <div v-else class="no-diagram">
                 <el-icon><Picture /></el-icon>
@@ -358,11 +358,11 @@
               </div>
             </div>
           </el-tab-pane>
-          
+
           <!-- 流程变量 -->
           <el-tab-pane label="流程变量" name="variables">
             <div class="process-variables">
-              <el-table :data="processVariables" border>
+              <el-table :data="displayProcessVariables" border>
                 <el-table-column prop="name" label="变量名" min-width="150" />
                 <el-table-column prop="type" label="类型" width="100" />
                 <el-table-column prop="value" label="值" min-width="200">
@@ -377,7 +377,20 @@
               </el-table>
             </div>
           </el-tab-pane>
-          
+
+          <!-- 动态表单的预览 -->
+          <el-tab-pane label="动态表单" name="form">
+            <div class="process-form">
+              <form-create
+                v-if="formViewRule.length > 0"
+                v-model="formViewData"
+                :rule="formViewRule"
+                :option="formViewOptions"
+              />
+              <div v-else class="empty-form">动态表单</div>
+            </div>
+          </el-tab-pane>
+
           <!-- 操作历史 -->
           <el-tab-pane label="操作历史" name="history">
             <div class="operation-history">
@@ -406,13 +419,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { 
-  Search, Refresh, List, Clock, VideoPlay, VideoPause, CircleCheck, 
-  CircleClose, Document, View, ArrowDown, Picture, Delete 
+import {
+  Search, Refresh, List, Clock, VideoPlay, VideoPause, CircleCheck,
+  CircleClose, Document, View, ArrowDown, Picture, Delete
 } from '@element-plus/icons-vue'
 import type { FlowableProcessInstance } from '@/api/flowable'
+import FcDesigner from '@/components/FcDesigner'
 import { deleteFlowableProcess, suspendFlowableProcess, activateFlowableProcess, terminateFlowableProcess, getProcessDiagram, getProcessVariables, getProcessHistory } from '@/api/flowable'
 
 // 响应式数据
@@ -451,6 +465,13 @@ const processDiagram = ref<string>('')
 // 流程变量
 const processVariables = ref<any[]>([])
 
+const formJsonValue = ref<string>('')
+const formViewRule = ref<any[]>([])
+const formViewOptions = ref<Record<string, any>>({})
+const formViewData = ref<Record<string, any>>({})
+const formCreate = (FcDesigner as any).formCreate
+const displayProcessVariables = computed(() => (processVariables.value || []).filter((item) => item?.name !== 'formJson' && item?.name !== 'form_json'))
+
 // 操作历史
 const operationHistory = ref<any[]>([])
 
@@ -458,6 +479,77 @@ const operationHistory = ref<any[]>([])
 // const bpmnContainer = ref<HTMLElement | null>(null)
 
 // 方法
+// ??
+const parseFormJsonPayload = (raw: any) => {
+  if (!raw) return null
+  try {
+    let data = raw
+    if (typeof data === 'string') {
+      data = JSON.parse(data)
+    }
+    if (typeof data === 'string') {
+      data = JSON.parse(data)
+    }
+    return data && typeof data === 'object' ? data : null
+  } catch (error) {
+    console.error(error)
+    return null
+  }
+}
+
+const parseFormCreateJson = (raw: any) => {
+  if (!raw) return null
+  try {
+    if (typeof raw === 'string') {
+      if (formCreate?.parseJson) {
+        return formCreate.parseJson(raw)
+      }
+      return JSON.parse(raw)
+    }
+    return raw
+  } catch (error) {
+    console.error( error)
+    return null
+  }
+}
+
+const normalizeFormViewOptions = (options: any) => {
+  const normalized = options && typeof options === 'object' ? { ...options } : {}
+  normalized.submitBtn = false
+  normalized.resetBtn = false
+  normalized.disabled = true
+  normalized.form = normalized.form || {}
+  normalized.form.disabled = true
+  return normalized
+}
+
+const resetFormView = () => {
+  formJsonValue.value = ''
+  formViewRule.value = []
+  formViewOptions.value = {}
+  formViewData.value = {}
+}
+
+const initFormView = (raw: any) => {
+  const payload = parseFormJsonPayload(raw)
+  if (!payload) {
+    resetFormView()
+    return
+  }
+  const rule = parseFormCreateJson(payload.rule || payload.rules)
+  const options = parseFormCreateJson(payload.options || payload.option)
+  formViewRule.value = Array.isArray(rule) ? rule : []
+  formViewOptions.value = normalizeFormViewOptions(options)
+  formViewData.value = {}
+}
+
+const applyProcessVariables = (variables: any[]) => {
+  processVariables.value = Array.isArray(variables) ? variables : []
+  const formVar = (processVariables.value || []).find((item) => item?.name === 'formJson' || item?.name === 'form_json')
+  formJsonValue.value = formVar && formVar.value != null ? String(formVar.value) : ''
+  initFormView(formJsonValue.value)
+}
+
 const loadData = async () => {
   try {
     loading.value = true
@@ -470,13 +562,13 @@ const loadData = async () => {
     // 调用API获取流程实例数据
     const { getProcessInstances } = await import('@/api/flowable')
     const response = await getProcessInstances(params)
-    
+
     tableData.value = response.records || []
     pageParams.total = response.total || 0
 
     // 更新统计数据
     updateStats(tableData.value)
-    
+
   } catch (error) {
     console.error('加载数据失败:', error)
     ElMessage.error('加载数据失败')
@@ -522,7 +614,7 @@ const handleCurrentChange = (current: number) => {
 
 const viewInstanceDetail = async (row: FlowableProcessInstance) => {
   currentInstance.value = row
-  
+
   try {
     // 并行获取流程图、流程变量和操作历史
     const [diagramResponse, variablesResponse, historyResponse] = await Promise.all([
@@ -530,26 +622,27 @@ const viewInstanceDetail = async (row: FlowableProcessInstance) => {
       getProcessVariables(row.id),
       getProcessHistory(row.id)
     ])
-    
+
     // 设置流程图
     processDiagram.value = diagramResponse
-    
+
     // 设置流程变量
-    processVariables.value = variablesResponse
-    
+    applyProcessVariables(variablesResponse)
+
     // 设置操作历史
     operationHistory.value = historyResponse
-    
+
     // 显示对话框
     detailDialogVisible.value = true
-    
+
   } catch (error) {
     console.error('获取流程详情失败:', error)
     ElMessage.error('获取流程详情失败')
-    
+
     // 设置默认值以防API调用失败
     processDiagram.value = ''
     processVariables.value = []
+    resetFormView()
     operationHistory.value = []
   }
 }
@@ -561,7 +654,7 @@ const suspendInstance = async (row: FlowableProcessInstance) => {
       cancelButtonText: '取消',
       type: 'warning'
     })
-    
+
     await suspendFlowableProcess(row.id)
     ElMessage.success('流程实例已挂起')
     loadData()
@@ -580,7 +673,7 @@ const activateInstance = async (row: FlowableProcessInstance) => {
       cancelButtonText: '取消',
       type: 'warning'
     })
-    
+
     await activateFlowableProcess(row.id)
     ElMessage.success('流程实例已激活')
     loadData()
@@ -599,7 +692,7 @@ const terminateInstance = async (row: FlowableProcessInstance) => {
       cancelButtonText: '取消',
       type: 'warning'
     })
-    
+
     await terminateFlowableProcess(row.id)
     ElMessage.success('流程实例已终止')
     loadData()
@@ -650,7 +743,7 @@ const handleDelete = async (row: FlowableProcessInstance) => {
       cancelButtonText: '取消',
       type: 'warning'
     })
-    
+
     await deleteFlowableProcess(row.id)
     ElMessage.success('删除成功')
     loadData()
@@ -669,7 +762,7 @@ const handleBatchSuspend = async () => {
       cancelButtonText: '取消',
       type: 'warning'
     })
-    
+
     // TODO: 调用批量挂起API
     ElMessage.success('批量挂起成功')
     clearSelection()
@@ -689,7 +782,7 @@ const handleBatchActivate = async () => {
       cancelButtonText: '取消',
       type: 'warning'
     })
-    
+
     // TODO: 调用批量激活API
     ElMessage.success('批量激活成功')
     clearSelection()
@@ -709,7 +802,7 @@ const handleBatchTerminate = async () => {
       cancelButtonText: '取消',
       type: 'warning'
     })
-    
+
     // TODO: 调用批量终止API
     ElMessage.success('批量终止成功')
     clearSelection()
@@ -762,9 +855,9 @@ const formatXml = (xml: string) => {
     const PADDING = ' '.repeat(2) // 缩进2个空格
     const reg = /(>)(<)(\/*)/g
     let pad = 0
-    
+
     xml = xml.replace(reg, '$1\r\n$2$3') // 在标签之间添加换行
-    
+
     return xml.split('\r\n').map((node) => {
       let indent = 0
       if (node.match(/.+<\/\w[^>]*>$/)) {
@@ -784,7 +877,7 @@ const formatXml = (xml: string) => {
         // 文本内容
         indent = pad
       }
-      
+
       return PADDING.repeat(indent) + node
     }).join('\r\n')
   } catch (e) {
@@ -811,14 +904,14 @@ const formatTime = (time?: string) => {
 
 const formatDuration = (startTime?: string, endTime?: string) => {
   if (!startTime) return '-'
-  
+
   const start = new Date(startTime)
   const end = endTime ? new Date(endTime) : new Date()
   const duration = end.getTime() - start.getTime()
-  
+
   const hours = Math.floor(duration / (1000 * 60 * 60))
   const minutes = Math.floor((duration % (1000 * 60 * 60)) / (1000 * 60))
-  
+
   if (hours > 0) {
     return `${hours}小时${minutes}分钟`
   } else if (minutes > 0) {
@@ -840,38 +933,38 @@ onMounted(() => {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    
+
     .header-actions {
       display: flex;
       gap: 10px;
       align-items: center;
     }
   }
-  
+
   .stats-cards {
     margin-top: 20px;
-    
+
     .stat-card {
       position: relative;
       overflow: hidden;
-      
+
       .stat-content {
         position: relative;
         z-index: 1;
-        
+
         .stat-number {
           font-size: 28px;
           font-weight: bold;
           color: #303133;
           margin-bottom: 5px;
         }
-        
+
         .stat-label {
           color: #909399;
           font-size: 14px;
         }
       }
-      
+
       .stat-icon {
         position: absolute;
         right: 20px;
@@ -880,69 +973,69 @@ onMounted(() => {
         font-size: 40px;
         opacity: 0.1;
       }
-      
+
       &.running .stat-icon {
         color: #67c23a;
       }
-      
+
       &.completed .stat-icon {
         color: #409eff;
       }
-      
+
       &.suspended .stat-icon {
         color: #e6a23c;
       }
-      
+
       &.terminated .stat-icon {
         color: #f56c6c;
       }
     }
   }
-  
+
   .instance-list-card {
     margin-top: 20px;
-    
+
     .card-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
     }
-    
+
     .process-name {
       display: flex;
       align-items: center;
       gap: 8px;
     }
-    
+
     .timeline-view {
       .timeline-card {
         margin-bottom: 10px;
-        
+
         .timeline-header {
           display: flex;
           justify-content: space-between;
           align-items: center;
-          
+
           .process-info {
             display: flex;
             align-items: center;
             gap: 10px;
-            
+
             h4 {
               margin: 0;
               font-size: 16px;
             }
           }
         }
-        
+
         .timeline-content {
           margin-top: 10px;
-          
+
           p {
             margin: 5px 0;
             font-size: 14px;
             color: #606266;
-            
+
             strong {
               color: #303133;
             }
@@ -950,46 +1043,46 @@ onMounted(() => {
         }
       }
     }
-    
+
     .pagination {
       margin-top: 20px;
       text-align: right;
     }
   }
-  
+
   .batch-actions {
     position: fixed;
     bottom: 20px;
     left: 50%;
     transform: translateX(-50%);
     z-index: 1000;
-    
+
     .batch-content {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      
+
       .batch-buttons {
         display: flex;
         gap: 10px;
       }
     }
   }
-  
+
   .instance-detail {
     .process-diagram {
       text-align: center;
-      
+
       .no-diagram {
         padding: 40px;
         color: #909399;
       }
-      
+
       .bpmn-canvas {
         background: #f8f9fa;
         border-radius: 4px;
         position: relative;
-        
+
         pre {
           background: #f8f9fa;
           border: none;
@@ -1006,7 +1099,7 @@ onMounted(() => {
           margin: 0;
         }
       }
-      
+
       .bpmn-xml {
         background: #f8f9fa;
         border: 1px solid #e9ecef;
@@ -1022,26 +1115,26 @@ onMounted(() => {
         word-break: break-all;
       }
     }
-    
+
     .el-icon {
       font-size: 48px;
       margin-bottom: 10px;
     }
-    
+
     .process-variables {
       max-height: 400px;
       overflow-y: auto;
     }
-    
+
     .operation-history {
       max-height: 400px;
       overflow-y: auto;
-      
+
       .history-content {
         p {
           margin: 5px 0;
           font-size: 14px;
-          
+
           strong {
             color: #303133;
           }

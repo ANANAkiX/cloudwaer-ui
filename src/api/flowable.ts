@@ -29,6 +29,7 @@ export interface FlowableModelDetail {
   remark?: string
   bpmnXml?: string
   nodeActions?: FlowableNodeAction[]
+  formJson?: string
   isExecutable?: boolean
   updateTime?: string
 }
@@ -45,6 +46,7 @@ export interface FlowableProcessDefinition {
   avgDuration?: string
   createTime?: string
   updateTime?: string
+  formJson?: string
   formFields?: FormField[]
 }
 

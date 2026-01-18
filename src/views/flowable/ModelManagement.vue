@@ -284,6 +284,12 @@
             已编辑
           </el-tag>
         </el-form-item>
+        <el-form-item label="动态表单">
+          <el-button type="primary" @click="openFormDesignerDialog">打开设计器</el-button>
+          <el-tag v-if="formData.formJson" type="success" size="small" style="margin-left: 8px">
+            已配置
+          </el-tag>
+        </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
@@ -308,6 +314,21 @@
       <template #footer>
         <el-button @click="designerDialogVisible = false">取消</el-button>
         <el-button type="primary" @click="confirmDesigner">确认</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 动态表单设计器对话框 -->
+    <el-dialog
+      v-model="formDesignerVisible"
+      title="动态表单设计"
+      width="90%"
+      :close-on-click-modal="false"
+      top="5vh"
+    >
+      <FcDesigner ref="formDesignerRef" :height="600" />
+      <template #footer>
+        <el-button @click="formDesignerVisible = false">取消</el-button>
+        <el-button type="primary" @click="confirmFormDesigner">确认</el-button>
       </template>
     </el-dialog>
 
@@ -407,7 +428,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, computed } from 'vue'
+import { ref, reactive, onMounted, computed, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { 
   Search, Document, Check, Edit, FolderOpened, List, Grid, Upload, 
@@ -425,6 +446,7 @@ import {
 } from '@/api/model'
 import { startFlowableProcess } from '@/api/flowable'
 import ProcessDesigner from '@/views/flowable/ProcessDesigner.vue'
+import FcDesigner from '@/components/FcDesigner'
 
 import DictSelect from '@/components/DictSelect.vue'
 // 响应式数据
@@ -433,6 +455,7 @@ const saveLoading = ref(false)
 const startLoading = ref(false)
 const dialogVisible = ref(false)
 const designerDialogVisible = ref(false)
+const formDesignerVisible = ref(false)
 const startDialogVisible = ref(false)
 const historyDialogVisible = ref(false)
 const historyLoading = ref(false)
@@ -471,7 +494,8 @@ const formData = reactive<ModelFormData>({
   category: '',
   remark: '',
   isExecutable: true,
-  bpmnXml: ''
+  bpmnXml: '',
+  formJson: ''
 })
 
 // 启动流程表单
@@ -484,6 +508,7 @@ const startFormData = reactive({
 // 表单引用
 const formRef = ref()
 const designerRef = ref<InstanceType<typeof ProcessDesigner> | null>(null)
+const formDesignerRef = ref<any>(null)
 const startFormRef = ref()
 
 // 表单验证规则
@@ -576,6 +601,7 @@ const normalizeProcessExecutableAttribute = (xml: string, isExecutable: boolean)
 const applyProcessMetaToXml = (xml: string, meta: { modelKey?: string; modelName?: string; isExecutable?: boolean }) => {
   if (!xml) return xml
   try {
+    const isExecutable = meta.isExecutable !== undefined ? meta.isExecutable : true
     const parser = new DOMParser()
     const doc = parser.parseFromString(xml, 'text/xml')
     const process =
@@ -588,7 +614,6 @@ const applyProcessMetaToXml = (xml: string, meta: { modelKey?: string; modelName
       if (meta.modelName) {
         process.setAttribute('name', meta.modelName)
       }
-      const isExecutable = meta.isExecutable !== undefined ? meta.isExecutable : true
       process.setAttribute('isExecutable', String(isExecutable))
     }
     const serializer = new XMLSerializer()
@@ -614,6 +639,7 @@ const handleAdd = () => {
     remark: '',
     isExecutable: true,
     bpmnXml: '',
+    formJson: '',
     nodeActions: []
   })
   dialogVisible.value = true
@@ -626,6 +652,7 @@ const handleEdit = async (row: FlowableModelListItem) => {
   try {
     const detail = await getModelDetail(row.id as number)
     formData.bpmnXml = detail.bpmnXml
+    formData.formJson = detail.formJson || ''
     formData.nodeActions = detail.nodeActions || []
     formData.remark = detail.remark ?? (detail as any).remake ?? formData.remark
     const parsedExecutable = parseIsExecutableFromXml(detail.bpmnXml)
@@ -684,6 +711,59 @@ const confirmDesigner = async () => {
   formData.bpmnXml = payload.bpmnXml
   formData.nodeActions = payload.nodeActions
   designerDialogVisible.value = false
+}
+
+const parseFormJson = (raw: any) => {
+  if (!raw) return null
+  try {
+    let data = raw
+    if (typeof data === 'string') {
+      data = JSON.parse(data)
+    }
+    if (typeof data === 'string') {
+      data = JSON.parse(data)
+    }
+    return data && typeof data === 'object' ? data : null
+  } catch (error) {
+    console.error('解析表单JSON失败:', error)
+    return null
+  }
+}
+
+const openFormDesignerDialog = async () => {
+  formDesignerVisible.value = true
+  await nextTick()
+  const designer = formDesignerRef.value
+  if (!designer) return
+  const payload = parseFormJson(formData.formJson)
+  if (payload) {
+    if (designer.setRule) {
+      designer.setRule(payload.rule || payload.rules || [])
+    }
+    if (designer.setOption || designer.setOptions) {
+      const options = payload.options || payload.option || {}
+      if (designer.setOption) {
+        designer.setOption(options)
+      } else {
+        designer.setOptions(options)
+      }
+    }
+  } else {
+    if (designer.setRule) designer.setRule([])
+    if (designer.setOption) designer.setOption({})
+  }
+}
+
+const confirmFormDesigner = () => {
+  const designer = formDesignerRef.value
+  if (!designer || !designer.getJson || !designer.getOptionsJson) {
+    ElMessage.error('表单设计器未准备好')
+    return
+  }
+  const ruleJson = designer.getJson()
+  const optionsJson = designer.getOptionsJson()
+  formData.formJson = JSON.stringify({ rule: ruleJson, options: optionsJson })
+  formDesignerVisible.value = false
 }
 
 const handlePublish = async (row: FlowableModelListItem) => {

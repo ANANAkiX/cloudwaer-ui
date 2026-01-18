@@ -25,6 +25,7 @@ export interface FlowableModelDetail {
   bpmnXml: string
   nodeActions?: any[]
   nodeActionsJson?: string
+  formJson?: string
   remark?: string
   createTime?: string
   updateTime?: string
@@ -37,6 +38,7 @@ export interface ModelSaveDTO {
   modelName: string
   category?: string
   bpmnXml: string
+  formJson?: string
   nodeActions?: any[]
   remark?: string
 }

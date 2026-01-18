@@ -444,15 +444,54 @@
           </el-descriptions-item>
         </el-descriptions>
         
-        <!-- 流程变量 -->
-        <div class="process-variables" v-if="processVariables.length > 0">
-          <el-divider content-position="left">流程变量</el-divider>
-          <el-table :data="processVariables" border size="small">
-            <el-table-column prop="name" label="变量名" width="150" />
-            <el-table-column prop="type" label="类型" width="100" />
-            <el-table-column prop="value" label="值" />
-          </el-table>
-        </div>
+        <!-- Detail Tabs -->
+        <el-tabs v-model="detailTab" class="detail-tabs">
+          <el-tab-pane label="流程变量" name="variables">
+            <div class="process-variables" v-if="displayProcessVariables.length > 0">
+              <el-divider content-position="left">流程变量</el-divider>
+              <el-table :data="displayProcessVariables" border size="small">
+                <el-table-column prop="name" label="变量名" width="150" />
+                <el-table-column prop="type" label="类型" width="100" />
+                <el-table-column prop="value" label="值" />
+              </el-table>
+            </div>
+            <div v-else class="empty-form">暂无数据</div>
+          </el-tab-pane>
+          <el-tab-pane label="表单" name="form">
+            <el-divider content-position="left">动态表单</el-divider>
+            <div class="process-form">
+              <form-create
+                v-if="formViewRule.length > 0"
+                v-model="formViewData"
+                :rule="formViewRule"
+                :option="formViewOptions"
+              />
+              <div v-else class="empty-form">暂无数据</div>
+            </div>
+          </el-tab-pane>
+          <el-tab-pane label="操作记录" name="history">
+            <el-divider content-position="left">操作记录</el-divider>
+            <div class="operation-history">
+              <el-timeline v-if="operationHistory.length > 0">
+                <el-timeline-item
+                  v-for="history in operationHistory"
+                  :key="history.id"
+                  :timestamp="formatTime(history.time)"
+                  :type="getHistoryType(history.type)"
+                >
+                  <el-card>
+                    <div class="history-content">
+                      <p><strong>{{ history.userName }}</strong> {{ history.action }}</p>
+                      <p v-if="history.comment">??: {{ history.comment }}</p>
+                      <p v-if="history.duration">??: {{ history.duration }}</p>
+                    </div>
+                  </el-card>
+                </el-timeline-item>
+              </el-timeline>
+              <div v-else class="empty-form">暂无数据</div>
+            </div>
+          </el-tab-pane>
+        </el-tabs>
       </div>
     </el-dialog>
   </div>
@@ -466,13 +505,15 @@ import {
   Document, User, View, Picture 
 } from '@element-plus/icons-vue'
 import type { FlowableTaskItem } from '@/api/flowable'
+import FcDesigner from '@/components/FcDesigner'
 import { 
   getTodoTasksByPage, 
   getDoneTasksByPage, 
   claimFlowableTask, 
   completeFlowableTask,
   getFlowableTaskDetail,
-  getProcessVariables
+  getProcessVariables,
+  getProcessHistory
 } from '@/api/flowable'
 
 // 任务表单字段接口
@@ -496,6 +537,7 @@ const taskType = ref<'todo' | 'done' | 'all'>('todo')
 const searchKeyword = ref('')
 const completeDialogVisible = ref(false)
 const detailDialogVisible = ref(false)
+const detailTab = ref('variables')
 const selectedRows = ref<FlowableTaskItem[]>([])
 const currentTask = ref<FlowableTaskItem | null>(null)
 
@@ -528,6 +570,15 @@ const taskFormFields = ref<TaskFormField[]>([])
 // 流程变量
 const processVariables = ref<any[]>([])
 
+const formJsonValue = ref<string>('')
+const formViewRule = ref<any[]>([])
+const formViewOptions = ref<Record<string, any>>({})
+const formViewData = ref<Record<string, any>>({})
+const formCreate = (FcDesigner as any).formCreate
+const displayProcessVariables = computed(() => (processVariables.value || []).filter((item) => item?.name !== 'formJson' && item?.name !== 'form_json'))
+
+const operationHistory = ref<any[]>([])
+
 // 表单引用
 const formRef = ref()
 
@@ -551,6 +602,76 @@ const formRules = computed(() => {
 })
 
 // 方法
+const parseFormJsonPayload = (raw: any) => {
+  if (!raw) return null
+  try {
+    let data = raw
+    if (typeof data === 'string') {
+      data = JSON.parse(data)
+    }
+    if (typeof data === 'string') {
+      data = JSON.parse(data)
+    }
+    return data && typeof data === 'object' ? data : null
+  } catch (error) {
+    console.error( error)
+    return null
+  }
+}
+
+const parseFormCreateJson = (raw: any) => {
+  if (!raw) return null
+  try {
+    if (typeof raw === 'string') {
+      if (formCreate?.parseJson) {
+        return formCreate.parseJson(raw)
+      }
+      return JSON.parse(raw)
+    }
+    return raw
+  } catch (error) {
+    console.error( error)
+    return null
+  }
+}
+
+const normalizeFormViewOptions = (options: any) => {
+  const normalized = options && typeof options === 'object' ? { ...options } : {}
+  normalized.submitBtn = false
+  normalized.resetBtn = false
+  normalized.disabled = true
+  normalized.form = normalized.form || {}
+  normalized.form.disabled = true
+  return normalized
+}
+
+const resetFormView = () => {
+  formJsonValue.value = ''
+  formViewRule.value = []
+  formViewOptions.value = {}
+  formViewData.value = {}
+}
+
+const initFormView = (raw: any) => {
+  const payload = parseFormJsonPayload(raw)
+  if (!payload) {
+    resetFormView()
+    return
+  }
+  const rule = parseFormCreateJson(payload.rule || payload.rules)
+  const options = parseFormCreateJson(payload.options || payload.option)
+  formViewRule.value = Array.isArray(rule) ? rule : []
+  formViewOptions.value = normalizeFormViewOptions(options)
+  formViewData.value = {}
+}
+
+const applyProcessVariables = (variables: any[]) => {
+  processVariables.value = Array.isArray(variables) ? variables : []
+  const formVar = (processVariables.value || []).find((item) => item?.name === 'formJson' || item?.name === 'form_json')
+  formJsonValue.value = formVar && formVar.value != null ? String(formVar.value) : ''
+  initFormView(formJsonValue.value)
+}
+
 const loadData = async () => {
   try {
     loading.value = true
@@ -706,7 +827,6 @@ const handleCompleteTask = async () => {
     
   } catch (error) {
     console.error('处理任务失败:', error)
-    ElMessage.error('处理任务失败')
   } finally {
     completeLoading.value = false
   }
@@ -733,13 +853,17 @@ const claimTask = async (task: FlowableTaskItem) => {
 
 const viewTaskDetail = async (task: FlowableTaskItem) => {
   try {
+    detailTab.value = 'variables'
     currentTask.value = await getFlowableTaskDetail(task.id)
 
     processVariables.value = []
+    operationHistory.value = []
+    resetFormView()
     const processInstanceId =
       currentTask.value?.processInstanceId || task.processInstanceId
     if (processInstanceId) {
-      processVariables.value = await getProcessVariables(processInstanceId)
+      applyProcessVariables(await getProcessVariables(processInstanceId))
+      operationHistory.value = await getProcessHistory(processInstanceId)
     }
     
     detailDialogVisible.value = true
@@ -820,6 +944,18 @@ const getPriorityText = (priority?: number) => {
     case 2: return '中'
     case 3: return '低'
     default: return '普通'
+  }
+}
+
+const getHistoryType = (type: string) => {
+  switch (type) {
+    case 'start': return 'primary'
+    case 'wait': return 'info'
+    case 'complete': return 'success'
+    case 'approve': return 'success'
+    case 'reject': return 'danger'
+    case 'end': return 'info'
+    default: return 'info'
   }
 }
 

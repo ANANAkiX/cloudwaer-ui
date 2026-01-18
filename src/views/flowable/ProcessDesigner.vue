@@ -202,7 +202,7 @@ const elementProperties = reactive({
   candidateGroups: '',
   conditionExpression: '',
   // 监听器配置
-  enableListener: false,
+  enableListener: true,
   listenerType: 'task',
   listenerEvent: 'create',
   listenerDelegate: '${flowableTaskListener}'
@@ -241,6 +241,31 @@ const getDefaultListenerSettings = () => {
     event: 'start',
     delegate: '${flowableExecutionListener}'
   }
+}
+
+
+const getFlowableAttribute = (businessObject: any, name: string) => {
+  if (!businessObject) return ''
+  const direct = businessObject[name]
+  if (direct !== undefined && direct !== null && direct !== '') return direct
+  const attrs = businessObject.$attrs
+  if (!attrs) return ''
+  const attrName = `flowable:${name}`
+  return attrs[attrName] || ''
+}
+
+const setFlowableAttribute = (businessObject: any, name: string, value: string) => {
+  if (!businessObject) return
+  if (!businessObject.$attrs) {
+    businessObject.$attrs = {}
+  }
+  const attrName = `flowable:${name}`
+  if (value) {
+    businessObject.$attrs[attrName] = value
+  } else {
+    delete businessObject.$attrs[attrName]
+  }
+  businessObject[name] = value
 }
 
 const parseListenerConfigFromBusinessObject = (
@@ -337,7 +362,7 @@ const initModeler = async () => {
             candidateGroups: '',
             conditionExpression: '',
             // 监听器配置
-            enableListener: false,
+            enableListener: true,
             listenerType: 'task',
             listenerEvent: 'create',
             listenerDelegate: '${flowableTaskListener}'
@@ -379,7 +404,7 @@ const updateElementProperties = () => {
         candidateGroups: '',
         conditionExpression: '',
         // 监听器配置
-        enableListener: false,
+        enableListener: true,
         listenerType: 'task',
         listenerEvent: 'create',
         listenerDelegate: '${flowableTaskListener}'
@@ -421,9 +446,9 @@ const updateElementProperties = () => {
     Object.assign(elementProperties, {
       id: element.id || '',
       name: businessObject.name || '',
-      assignee: businessObject.assignee || '',
-      candidateUsers: businessObject.candidateUsers || '',
-      candidateGroups: businessObject.candidateGroups || '',
+      assignee: getFlowableAttribute(businessObject, 'assignee'),
+      candidateUsers: getFlowableAttribute(businessObject, 'candidateUsers'),
+      candidateGroups: getFlowableAttribute(businessObject, 'candidateGroups'),
       conditionExpression: businessObject.conditionExpression || '',
       // 监听器配置
       enableListener: listenerConfig.enable,
@@ -442,7 +467,7 @@ const updateElementProperties = () => {
       candidateGroups: '',
       conditionExpression: '',
       // 监听器配置
-      enableListener: false,
+      enableListener: true,
       listenerType: 'task',
       listenerEvent: 'create',
       listenerDelegate: '${flowableTaskListener}'
@@ -471,13 +496,13 @@ const updateElementProperty = (property: string, value: string) => {
         }
         break
       case 'assignee':
-        businessObject.assignee = value
+        setFlowableAttribute(businessObject, 'assignee', value)
         break
       case 'candidateUsers':
-        businessObject.candidateUsers = value
+        setFlowableAttribute(businessObject, 'candidateUsers', value)
         break
       case 'candidateGroups':
-        businessObject.candidateGroups = value
+        setFlowableAttribute(businessObject, 'candidateGroups', value)
         break
       case 'conditionExpression':
         businessObject.conditionExpression = value
@@ -591,6 +616,72 @@ const ensureFlowableNamespace = (xmlDoc: Document) => {
 
   if (!definitions.getAttribute('xmlns:flowable')) {
     definitions.setAttribute('xmlns:flowable', 'http://flowable.org/bpmn')
+  }
+}
+
+
+
+const findXmlElementById = (xmlDoc: Document, element: any) => {
+  const possibleTagNames = [
+    element.type,
+    element.type.replace('bpmn:', ''),
+    'bpmn:' + element.type.replace('bpmn:', '')
+  ]
+
+  for (const tagName of possibleTagNames) {
+    const xmlElements = xmlDoc.getElementsByTagName(tagName)
+    for (let i = 0; i < xmlElements.length; i++) {
+      const xmlElement = xmlElements[i] as Element
+      if (xmlElement.getAttribute('id') == element.id) {
+        return xmlElement
+      }
+    }
+  }
+
+  const allElements = xmlDoc.getElementsByTagName('*')
+  for (let i = 0; i < allElements.length; i++) {
+    const xmlElement = allElements[i] as Element
+    if (xmlElement.getAttribute('id') === element.id) {
+      return xmlElement
+    }
+  }
+
+  return null
+}
+
+const setOrRemoveAttribute = (targetElement: Element, attrName: string, value: string) => {
+  if (value) {
+    targetElement.setAttribute(attrName, value)
+  } else {
+    targetElement.removeAttribute(attrName)
+  }
+}
+
+const addAssignmentConfigToXml = (xmlDoc: Document) => {
+  try {
+    ensureFlowableNamespace(xmlDoc)
+
+    const elementRegistry = modeler?.get('elementRegistry')
+    if (!elementRegistry) return
+
+    const elements = elementRegistry.getAll()
+    elements.forEach((element: any) => {
+      if (element.type !== 'bpmn:UserTask') return
+
+      const businessObject = element.businessObject
+      const assignee = getFlowableAttribute(businessObject, 'assignee')
+      const candidateUsers = getFlowableAttribute(businessObject, 'candidateUsers')
+      const candidateGroups = getFlowableAttribute(businessObject, 'candidateGroups')
+
+      const targetElement = findXmlElementById(xmlDoc, element)
+      if (!targetElement) return
+
+      setOrRemoveAttribute(targetElement, 'flowable:assignee', assignee)
+      setOrRemoveAttribute(targetElement, 'flowable:candidateUsers', candidateUsers)
+      setOrRemoveAttribute(targetElement, 'flowable:candidateGroups', candidateGroups)
+    })
+  } catch (error) {
+    console.error('add assignment attributes failed:', error)
   }
 }
 
@@ -795,14 +886,17 @@ const getActionConfig = (element: any) => {
   const config: any = {}
   
   // 添加配置信息
-  if (businessObject.assignee) {
-    config.assignee = businessObject.assignee
+  const assignee = getFlowableAttribute(businessObject, 'assignee')
+  if (assignee) {
+    config.assignee = assignee
   }
-  if (businessObject.candidateUsers) {
-    config.candidateUsers = businessObject.candidateUsers
+  const candidateUsers = getFlowableAttribute(businessObject, 'candidateUsers')
+  if (candidateUsers) {
+    config.candidateUsers = candidateUsers
   }
-  if (businessObject.candidateGroups) {
-    config.candidateGroups = businessObject.candidateGroups
+  const candidateGroups = getFlowableAttribute(businessObject, 'candidateGroups')
+  if (candidateGroups) {
+    config.candidateGroups = candidateGroups
   }
   if (businessObject.conditionExpression) {
     config.conditionExpression = businessObject.conditionExpression
@@ -834,6 +928,8 @@ const buildBpmnXml = async () => {
     }
 
     addListenerConfigToXml(xmlDoc)
+
+    addAssignmentConfigToXml(xmlDoc)
 
     const serializer = new XMLSerializer()
     updatedXml = serializer.serializeToString(xmlDoc)

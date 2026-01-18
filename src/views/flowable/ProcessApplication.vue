@@ -6,15 +6,17 @@
           <span>流程申请</span>
           <div class="header-actions">
             <el-input
-              v-model="searchKeyword"
-              placeholder="搜索流程名称"
-              clearable
-              style="width: 260px"
-              @clear="handleSearch"
-              @keyup.enter="handleSearch"
+                v-model="searchKeyword"
+                placeholder="搜索流程名称"
+                clearable
+                style="width: 260px"
+                @clear="handleSearch"
+                @keyup.enter="handleSearch"
             >
               <template #prefix>
-                <el-icon><Search /></el-icon>
+                <el-icon>
+                  <Search/>
+                </el-icon>
               </template>
             </el-input>
             <el-button type="primary" @click="handleSearch">搜索</el-button>
@@ -25,12 +27,12 @@
       <!-- 流程分类标签 -->
       <div class="category-tabs">
         <el-tabs v-model="activeCategory" @tab-change="handleCategoryChange">
-          <el-tab-pane label="全部" name="all" />
+          <el-tab-pane label="全部" name="all"/>
           <el-tab-pane
-            v-for="item in flowableTypeOptions"
-            :key="getFlowableTypeValue(item) || String(item.id)"
-            :label="getFlowableTypeLabel(item)"
-            :name="getFlowableTypeValue(item)"
+              v-for="item in flowableTypeOptions"
+              :key="getFlowableTypeValue(item) || String(item.id)"
+              :label="getFlowableTypeLabel(item)"
+              :name="getFlowableTypeValue(item)"
           />
         </el-tabs>
       </div>
@@ -42,7 +44,7 @@
             <el-card class="process-card" shadow="hover" @click="openApplicationDialog(process)">
               <div class="process-icon">
                 <el-icon :size="40">
-                  <component :is="getProcessIcon(process.category)" />
+                  <component :is="getProcessIcon(process.category)"/>
                 </el-icon>
               </div>
               <div class="process-info">
@@ -51,22 +53,26 @@
                 <p class="process-desc">{{ process.description || '暂无描述' }}</p>
                 <div class="process-stats">
                   <span class="stat-item">
-                    <el-icon><User /></el-icon>
+                    <el-icon><User/></el-icon>
                     {{ process.instanceCount || 0 }} 个实例
                   </span>
                   <span class="stat-item">
-                    <el-icon><Clock /></el-icon>
+                    <el-icon><Clock/></el-icon>
                     {{ process.avgDuration || '-' }} 平均时长
                   </span>
                 </div>
               </div>
               <div class="process-actions">
                 <el-button type="primary" size="small" @click.stop="openApplicationDialog(process)">
-                  <el-icon><VideoPlay /></el-icon>
+                  <el-icon>
+                    <VideoPlay/>
+                  </el-icon>
                   申请流程
                 </el-button>
                 <el-button size="small" @click.stop="viewProcessDetail(process)">
-                  <el-icon><View /></el-icon>
+                  <el-icon>
+                    <View/>
+                  </el-icon>
                   查看详情
                 </el-button>
               </div>
@@ -78,195 +84,61 @@
       <!-- 分页 -->
       <div class="pagination">
         <el-pagination
-          v-model:current-page="pageParams.current"
-          v-model:page-size="pageParams.size"
-          :page-sizes="[12, 24, 48, 96]"
-          :total="pageParams.total"
-          layout="total, sizes, prev, pager, next, jumper"
-          @size-change="handleSizeChange"
-          @current-change="handleCurrentChange"
+            v-model:current-page="pageParams.current"
+            v-model:page-size="pageParams.size"
+            :page-sizes="[12, 24, 48, 96]"
+            :total="pageParams.total"
+            layout="total, sizes, prev, pager, next, jumper"
+            @size-change="handleSizeChange"
+            @current-change="handleCurrentChange"
         />
       </div>
     </el-card>
 
     <!-- 申请流程对话框 -->
     <el-dialog
-      v-model="applicationDialogVisible"
-      :title="`申请${currentProcessName}`"
-      width="800px"
-      :close-on-click-modal="false"
+        v-model="applicationDialogVisible"
+        :title="`申请${currentProcessName}`"
+        width="800px"
+        :close-on-click-modal="false"
     >
       <div class="application-form">
         <!-- 基本信息 -->
         <el-form
-          ref="formRef"
-          :model="applicationForm"
-          :rules="formRules"
-          label-width="120px"
+            ref="formRef"
+            :model="applicationForm"
+            :rules="formRules"
+            label-width="120px"
         >
           <el-form-item label="业务Key" prop="businessKey">
-            <el-input 
-              v-model="applicationForm.businessKey" 
-              placeholder="请输入业务Key（可选）"
+            <el-input
+                v-model="applicationForm.businessKey"
+                placeholder="请输入业务Key（可选）"
             />
           </el-form-item>
-          
+          <el-divider />
           <!-- 动态表单字段 -->
-          <template v-if="formFields.length > 0">
-            <el-divider content-position="left">申请信息</el-divider>
-            
-            <el-form-item 
-              v-for="field in formFields" 
-              :key="field.id"
-              :label="field.label"
-              :prop="field.id"
-              :required="field.required"
-            >
-              <!-- 文本输入 -->
-              <el-input
-                v-if="field.type === 'input'"
-                v-model="applicationForm[field.id]"
-                :placeholder="field.placeholder"
-              />
-              
-              <!-- 文本域 -->
-              <el-input
-                v-else-if="field.type === 'textarea'"
-                v-model="applicationForm[field.id]"
-                type="textarea"
-                :rows="3"
-                :placeholder="field.placeholder"
-              />
-              
-              <!-- 数字输入 -->
-              <el-input-number
-                v-else-if="field.type === 'number'"
-                v-model="applicationForm[field.id]"
-                :min="field.min"
-                :max="field.max"
-                :precision="field.precision"
-                style="width: 100%"
-              />
-              
-              <!-- 日期选择 -->
-              <el-date-picker
-                v-else-if="field.type === 'date'"
-                v-model="applicationForm[field.id]"
-                type="date"
-                :placeholder="field.placeholder"
-                style="width: 100%"
-              />
-              
-              <!-- 日期时间选择 -->
-              <el-date-picker
-                v-else-if="field.type === 'datetime'"
-                v-model="applicationForm[field.id]"
-                type="datetime"
-                :placeholder="field.placeholder"
-                style="width: 100%"
-              />
-              
-              <!-- 下拉选择 -->
-              <el-select
-                v-else-if="field.type === 'select'"
-                v-model="applicationForm[field.id]"
-                :placeholder="field.placeholder"
-                style="width: 100%"
-              >
-                <el-option
-                  v-for="option in field.options"
-                  :key="option.value"
-                  :label="option.label"
-                  :value="option.value"
-                />
-              </el-select>
-              
-              <!-- 单选框 -->
-              <el-radio-group
-                v-else-if="field.type === 'radio'"
-                v-model="applicationForm[field.id]"
-              >
-                <el-radio
-                  v-for="option in field.options"
-                  :key="option.value"
-                  :label="option.value"
-                >
-                  {{ option.label }}
-                </el-radio>
-              </el-radio-group>
-              
-              <!-- 复选框 -->
-              <el-checkbox-group
-                v-else-if="field.type === 'checkbox'"
-                v-model="applicationForm[field.id]"
-              >
-                <el-checkbox
-                  v-for="option in field.options"
-                  :key="option.value"
-                  :label="option.value"
-                >
-                  {{ option.label }}
-                </el-checkbox>
-              </el-checkbox-group>
-              
-              <!-- 文件上传 -->
-              <el-upload
-                v-else-if="field.type === 'upload'"
-                class="upload-demo"
-                drag
-                :action="uploadUrl"
-                :on-success="(response) => handleUploadSuccess(response, field.id)"
-                :before-upload="handleBeforeUpload"
-                :file-list="applicationForm[field.id] || []"
-              >
-                <el-icon class="el-icon--upload"><upload-filled /></el-icon>
-                <div class="el-upload__text">
-                  将文件拖到此处，或<em>点击上传</em>
-                </div>
-                <template #tip>
-                  <div class="el-upload__tip">
-                    {{ field.tip || '请上传文件' }}
-                  </div>
-                </template>
-              </el-upload>
-            </el-form-item>
+          <template v-if="hasFormJson">
+            <form-create
+                v-model="formCreateData"
+                v-model:api="formCreateApi"
+                :rule="formCreateRule"
+                :option="formCreateOptions"
+            />
           </template>
-          
-          <!-- 附件上传 -->
-          <el-divider content-position="left">附件上传</el-divider>
-          <el-form-item label="附件">
-            <el-upload
-              class="upload-demo"
-              drag
-              :action="uploadUrl"
-              :on-success="handleAttachmentSuccess"
-              :file-list="attachments"
-              :on-remove="handleAttachmentRemove"
-            >
-              <el-icon class="el-icon--upload"><upload-filled /></el-icon>
-              <div class="el-upload__text">
-                将文件拖到此处，或<em>点击上传</em>
-              </div>
-              <template #tip>
-                <div class="el-upload__tip">
-                  支持上传多个附件，单个文件不超过10MB
-                </div>
-              </template>
-            </el-upload>
-          </el-form-item>
-          
+          <el-divider />
           <!-- 备注 -->
           <el-form-item label="备注">
             <el-input
-              v-model="applicationForm.remark"
-              type="textarea"
-              :rows="3"
-              placeholder="请输入备注信息（可选）"
+                v-model="applicationForm.remark"
+                type="textarea"
+                :rows="3"
+                placeholder="请输入备注信息（可选）"
             />
           </el-form-item>
         </el-form>
       </div>
-      
+
       <template #footer>
         <el-button @click="applicationDialogVisible = false">取消</el-button>
         <el-button type="primary" @click="handleSubmitApplication" :loading="submitLoading">
@@ -277,9 +149,9 @@
 
     <!-- 流程详情对话框 -->
     <el-dialog
-      v-model="detailDialogVisible"
-      title="流程详情"
-      width="600px"
+        v-model="detailDialogVisible"
+        title="流程详情"
+        width="600px"
     >
       <div class="process-detail" v-if="currentProcess">
         <el-descriptions :column="2" border>
@@ -311,11 +183,11 @@
             {{ currentProcess.avgDuration || '-' }}
           </el-descriptions-item>
         </el-descriptions>
-        
+
         <!-- 流程图预览 -->
         <div class="process-diagram" v-if="currentProcess.diagram">
           <el-divider content-position="left">流程图</el-divider>
-          <img :src="currentProcess.diagram" alt="流程图" style="width: 100%; max-height: 300px;" />
+          <img :src="currentProcess.diagram" alt="流程图" style="width: 100%; max-height: 300px;"/>
         </div>
       </div>
     </el-dialog>
@@ -323,15 +195,16 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, computed } from 'vue'
-import { ElMessage } from 'element-plus'
-import { 
+import {ref, reactive, onMounted, computed} from 'vue'
+import {ElMessage} from 'element-plus'
+import {
   Search, User, Clock, VideoPlay, View, UploadFilled,
   Document, Money, Setting, More
 } from '@element-plus/icons-vue'
-import { startFlowableProcess, getProcessDefinitions, getProcessDefinitionDetail } from '@/api/flowable'
-import type { FlowableProcessDefinition, FormField } from '@/api/flowable'
-import { useDict } from '@/utils/dict'
+import {startFlowableProcess, getProcessDefinitions, getProcessDefinitionDetail} from '@/api/flowable'
+import type {FlowableProcessDefinition} from '@/api/flowable'
+import {useDict} from '@/utils/dict'
+import FcDesigner from '@/components/FcDesigner'
 
 // 响应式数据
 const loading = ref(false)
@@ -346,8 +219,9 @@ const currentProcessName = computed(() => {
   return currentProcess.value.processName || ''
 })
 const attachments = ref<any[]>([])
-const { dicts } = useDict(['flowable_type'])
+const {dicts} = useDict(['flowable_type'])
 const flowableTypeOptions = computed(() => dicts.value.flowable_type || [])
+const formCreate = (FcDesigner as any).formCreate
 
 // 分页参数
 const pageParams = reactive({
@@ -366,7 +240,12 @@ const applicationForm = reactive<Record<string, any>>({
 })
 
 // 表单字段配置
-const formFields = ref<FormField[]>([])
+const formJsonPayload = ref<any | null>(null)
+const formCreateRule = ref<any[]>([])
+const formCreateOptions = ref<Record<string, any>>({})
+const formCreateData = ref<Record<string, any>>({})
+const formCreateApi = ref<any>(null)
+const hasFormJson = computed(() => !!formJsonPayload.value)
 
 // 表单引用
 const formRef = ref()
@@ -375,35 +254,128 @@ const formRef = ref()
 const uploadUrl = '/api/upload'
 
 // 表单验证规则
-const formRules = computed(() => {
-  const rules: Record<string, any> = {}
-  
-  formFields.value.forEach(field => {
-    if (field.required) {
-      rules[field.id] = [
-        { required: true, message: `请输入${field.label}`, trigger: 'blur' }
-      ]
+const formRules = computed(() => ({}))
+
+const parseFormJsonPayload = (raw: any) => {
+  if (!raw) return null
+  try {
+    let data = raw
+    if (typeof data === 'string') {
+      data = JSON.parse(data)
+    }
+    if (typeof data === 'string') {
+      data = JSON.parse(data)
+    }
+    return data && typeof data === 'object' ? data : null
+  } catch (error) {
+    console.error('解析表单JSON失败:', error)
+    return null
+  }
+}
+
+const parseFormCreateJson = (raw: any) => {
+  if (!raw) return null
+  try {
+    if (typeof raw === 'string') {
+      if (formCreate?.parseJson) {
+        return formCreate.parseJson(raw)
+      }
+      return JSON.parse(raw)
+    }
+    return raw
+  } catch (error) {
+    console.error('解析表单配置失败:', error)
+    return null
+  }
+}
+
+const normalizeFormCreateOptions = (options: any) => {
+  const normalized = options && typeof options === 'object' ? {...options} : {}
+  normalized.submitBtn = false
+  normalized.resetBtn = false
+  return normalized
+}
+
+const resetFormCreate = () => {
+  formJsonPayload.value = null
+  formCreateRule.value = []
+  formCreateOptions.value = {}
+  formCreateData.value = {}
+  formCreateApi.value = null
+}
+
+const initFormCreate = (raw: any) => {
+  const payload = parseFormJsonPayload(raw)
+  if (!payload) {
+    resetFormCreate()
+    return
+  }
+  const rule = parseFormCreateJson(payload.rule || payload.rules)
+  const options = parseFormCreateJson(payload.options || payload.option)
+  formJsonPayload.value = payload
+  formCreateRule.value = Array.isArray(rule) ? rule : []
+  formCreateOptions.value = normalizeFormCreateOptions(options)
+  formCreateData.value = {}
+}
+
+const applyValuesToRules = (rules: any[], values: Record<string, any>) => {
+  if (!Array.isArray(rules)) return
+  rules.forEach((rule) => {
+    if (!rule || typeof rule !== 'object') return
+    if (rule.field && Object.prototype.hasOwnProperty.call(values, rule.field)) {
+      const value = values[rule.field]
+      rule.value = value
+      rule.props = rule.props || {}
+      rule.props.value = value
+    }
+    if (Array.isArray(rule.children)) {
+      applyValuesToRules(rule.children, values)
+    }
+    if (Array.isArray(rule.control)) {
+      rule.control.forEach((control: any) => {
+        if (Array.isArray(control?.rule)) {
+          applyValuesToRules(control.rule, values)
+        }
+      })
     }
   })
-  
-  return rules
-})
+}
+
+const buildFormJsonWithValues = () => {
+  if (!formJsonPayload.value) return ''
+  const values = formCreateData.value || {}
+  const ruleCopy = JSON.parse(JSON.stringify(formCreateRule.value || []))
+  applyValuesToRules(ruleCopy, values)
+  const ruleJson = formCreate?.toJson ? formCreate.toJson(ruleCopy) : JSON.stringify(ruleCopy)
+  const optionsRaw = formJsonPayload.value.options || formJsonPayload.value.option || ''
+  const optionsJson = typeof optionsRaw === 'string' ? optionsRaw : JSON.stringify(optionsRaw || {})
+  return JSON.stringify({rule: ruleJson, options: optionsJson})
+}
+
+const validateFormCreate = async () => {
+  if (!formCreateApi.value || !formCreateApi.value.validate) return true
+  const result = formCreateApi.value.validate()
+  if (result && typeof result.then === 'function') {
+    return result
+  }
+  return result !== false
+}
 
 // 方法
 const loadData = async () => {
   try {
     loading.value = true
-    
+
     const response = await getProcessDefinitions({
       current: pageParams.current,
       size: pageParams.size,
       category: activeCategory.value === 'all' ? undefined : activeCategory.value,
       keyword: searchKeyword.value || undefined
     })
-    
+
     processList.value = response.records || []
     pageParams.total = response.total || 0
-    
+
   } catch (error) {
     console.error('加载数据失败:', error)
     ElMessage.error('加载数据失败')
@@ -436,74 +408,63 @@ const handleCurrentChange = (current: number) => {
 }
 
 const openApplicationDialog = (process: FlowableProcessDefinition) => {
+  if (!process.formJson) {
+    ElMessage.warning('没有配置表单数据')
+    return
+  }
   currentProcess.value = process
-  formFields.value = process.formFields || []
-  
-  // 重置表单
+  resetFormCreate()
+  initFormCreate(process.formJson)
+
   Object.assign(applicationForm, {
     businessKey: '',
     remark: ''
   })
-  
-  // 初始化表单字段
-  formFields.value.forEach(field => {
-    if (field.type === 'checkbox') {
-      applicationForm[field.id] = []
-    } else if (field.type === 'upload') {
-      applicationForm[field.id] = []
-    } else {
-      applicationForm[field.id] = ''
-    }
-  })
-  
+
   attachments.value = []
   applicationDialogVisible.value = true
+
 }
+
 
 const handleSubmitApplication = async () => {
   try {
     await formRef.value.validate()
-    
+    if (hasFormJson.value) {
+      await validateFormCreate()
+    }
     if (!currentProcess.value) return
-    
+
     submitLoading.value = true
-    
-    // 构建流程变量
+
     const variables: Record<string, any> = {}
-    
-    // 添加表单字段变量
-    formFields.value.forEach(field => {
-      const value = applicationForm[field.id]
-      if (value !== undefined && value !== null && value !== '') {
-        variables[field.id] = value
-      }
-    })
-    
-    // 添加备注
+
+    const formJson = buildFormJsonWithValues()
+    if (formJson) {
+      variables.formJson = formJson
+    }
+
     if (applicationForm.remark) {
       variables.remark = applicationForm.remark
     }
-    
-    // 添加附件信息
+
     if (attachments.value.length > 0) {
       variables.attachments = attachments.value.map(file => ({
         name: file.name,
         url: file.url
       }))
     }
-    
+
     await startFlowableProcess({
       processDefinitionKey: currentProcess.value.processKey,
       businessKey: applicationForm.businessKey || undefined,
       variables
     })
-    
-    ElMessage.success('流程申请提交成功')
+
     applicationDialogVisible.value = false
-    
+    ElMessage.success('申请成功')
   } catch (error) {
-    console.error('提交申请失败:', error)
-    ElMessage.error('提交申请失败')
+    console.error(error)
   } finally {
     submitLoading.value = false
   }
@@ -522,11 +483,16 @@ const viewProcessDetail = async (process: FlowableProcessDefinition) => {
 
 const getProcessIcon = (category: string) => {
   switch (category) {
-    case 'leave': return Document
-    case 'expense': return Money
-    case 'approval': return Setting
-    case 'ea': return Setting
-    default: return More
+    case 'leave':
+      return Document
+    case 'expense':
+      return Money
+    case 'approval':
+      return Setting
+    case 'ea':
+      return Setting
+    default:
+      return More
   }
 }
 
@@ -600,45 +566,45 @@ onMounted(() => {
     justify-content: space-between;
     align-items: center;
   }
-  
+
   .category-tabs {
     margin-bottom: 20px;
   }
-  
+
   .process-grid {
     margin-bottom: 20px;
-    
+
     .process-card {
       cursor: pointer;
       transition: all 0.3s ease;
       height: 280px;
-      
+
       &:hover {
         transform: translateY(-5px);
         box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
       }
-      
+
       .process-icon {
         text-align: center;
         margin-bottom: 15px;
         color: #409eff;
       }
-      
+
       .process-info {
         text-align: center;
-        
+
         h3 {
           margin: 0 0 10px 0;
           font-size: 16px;
           color: #303133;
         }
-        
+
         .process-key {
           color: #909399;
           font-size: 12px;
           margin: 5px 0;
         }
-        
+
         .process-desc {
           color: #606266;
           font-size: 14px;
@@ -651,12 +617,12 @@ onMounted(() => {
           -webkit-box-orient: vertical;
           line-clamp: 2;
         }
-        
+
         .process-stats {
           display: flex;
           justify-content: space-around;
           margin: 15px 0;
-          
+
           .stat-item {
             display: flex;
             align-items: center;
@@ -666,7 +632,7 @@ onMounted(() => {
           }
         }
       }
-      
+
       .process-actions {
         display: flex;
         justify-content: space-between;
@@ -674,28 +640,28 @@ onMounted(() => {
       }
     }
   }
-  
+
   .pagination {
     text-align: center;
   }
-  
+
   .application-form {
     max-height: 60vh;
     overflow-y: auto;
-    
+
     .upload-demo {
       text-align: center;
-      
+
       :deep(.el-upload) {
         width: 100%;
       }
-      
+
       :deep(.el-upload-dragger) {
         width: 100%;
       }
     }
   }
-  
+
   .process-detail {
     .process-diagram {
       margin-top: 20px;
