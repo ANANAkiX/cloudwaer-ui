@@ -187,6 +187,15 @@
                 激活
               </el-button>
               <el-button
+                v-if="scope.row.status === 'rejected'"
+                size="small"
+                type="warning"
+                @click="restartInstance(scope.row)"
+              >
+                <el-icon><Refresh /></el-icon>
+                &#x91CD;&#x65B0;&#x53D1;&#x8D77;
+              </el-button>
+              <el-button
                 v-if="scope.row.status === 'running'"
                 size="small"
                 type="danger"
@@ -427,7 +436,7 @@ import {
 } from '@element-plus/icons-vue'
 import type { FlowableProcessInstance } from '@/api/flowable'
 import FcDesigner from '@/components/FcDesigner'
-import { deleteFlowableProcess, suspendFlowableProcess, activateFlowableProcess, terminateFlowableProcess, getProcessDiagram, getProcessVariables, getProcessHistory } from '@/api/flowable'
+import { deleteFlowableProcess, suspendFlowableProcess, activateFlowableProcess, restartFlowableProcess, terminateFlowableProcess, getProcessDiagram, getProcessVariables, getProcessHistory } from '@/api/flowable'
 
 // 响应式数据
 const loading = ref(false)
@@ -453,7 +462,8 @@ const stats = reactive({
   running: 0,
   completed: 0,
   suspended: 0,
-  terminated: 0
+  terminated: 0,
+  rejected: 0
 })
 
 // 当前实例
@@ -585,6 +595,7 @@ const updateStats = (data: FlowableProcessInstance[]) => {
   stats.completed = data.filter(item => item.status === 'completed').length
   stats.suspended = data.filter(item => item.status === 'suspended').length
   stats.terminated = data.filter(item => item.status === 'terminated').length
+  stats.rejected = data.filter(item => item.status === 'rejected').length
 }
 
 const handleSearch = () => {
@@ -662,6 +673,24 @@ const suspendInstance = async (row: FlowableProcessInstance) => {
     if (error !== 'cancel') {
       console.error('挂起失败:', error)
       ElMessage.error('挂起失败')
+    }
+  }
+}
+
+const restartInstance = async (row: FlowableProcessInstance) => {
+  try {
+    await ElMessageBox.confirm('是否重新发起该流程实例？', '提示', {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
+    await restartFlowableProcess(row.id)
+    ElMessage.success('重新发起成功')
+    await loadData()
+  } catch (error) {
+    if (error !== 'cancel') {
+      console.error('restart process failed:', error)
+      ElMessage.error('重新发起失败')
     }
   }
 }
@@ -825,6 +854,7 @@ const getStatusType = (status?: string) => {
     case 'completed': return 'info'
     case 'suspended': return 'warning'
     case 'terminated': return 'danger'
+    case 'rejected': return 'danger'
     default: return ''
   }
 }
@@ -835,6 +865,8 @@ const getStatusText = (status?: string) => {
     case 'completed': return '已完成'
     case 'suspended': return '已挂起'
     case 'terminated': return '已终止'
+    case 'rejected': return '\u5DF2\u62D2\u7EDD'
+
     default: return '未知'
   }
 }
@@ -845,6 +877,7 @@ const getTimelineType = (status?: string) => {
     case 'completed': return 'success'
     case 'suspended': return 'warning'
     case 'terminated': return 'danger'
+    case 'rejected': return 'danger'
     default: return 'info'
   }
 }
@@ -888,6 +921,7 @@ const formatXml = (xml: string) => {
 const getHistoryType = (type: string) => {
   switch (type) {
     case 'start': return 'primary'
+    case 'restart': return 'primary'
     case 'wait': return 'info'
     case 'complete': return 'success'
     case 'approve': return 'success'

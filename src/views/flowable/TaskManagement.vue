@@ -482,8 +482,8 @@
                   <el-card>
                     <div class="history-content">
                       <p><strong>{{ history.userName }}</strong> {{ history.action }}</p>
-                      <p v-if="history.comment">??: {{ history.comment }}</p>
-                      <p v-if="history.duration">??: {{ history.duration }}</p>
+                      <p v-if="history.comment">{{ history.comment }}</p>
+                      <p v-if="history.duration">耗时: {{ history.duration }}</p>
                     </div>
                   </el-card>
                 </el-timeline-item>
@@ -950,6 +950,7 @@ const getPriorityText = (priority?: number) => {
 const getHistoryType = (type: string) => {
   switch (type) {
     case 'start': return 'primary'
+    case 'restart': return 'primary'
     case 'wait': return 'info'
     case 'complete': return 'success'
     case 'approve': return 'success'

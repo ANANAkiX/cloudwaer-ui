@@ -221,6 +221,14 @@ export function activateFlowableProcess(id: string): Promise<boolean> {
   })
 }
 
+export function restartFlowableProcess(id: string): Promise<boolean> {
+  return request({
+    url: '/flowable/process/restart',
+    method: 'post',
+    params: { processInstanceId: id }
+  })
+}
+
 export function terminateFlowableProcess(id: string): Promise<boolean> {
   return request({
     url: '/flowable/process/terminate',
