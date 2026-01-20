@@ -245,6 +245,14 @@ export function getProcessDiagram(id: string): Promise<string> {
   })
 }
 
+export function getProcessBpmnXml(id: string): Promise<string> {
+  return request({
+    url: '/flowable/process/bpmn',
+    method: 'get',
+    params: { processInstanceId: id }
+  })
+}
+
 export function getProcessVariables(id: string): Promise<Array<{ name: string; type: string; value: any; createTime?: string }>> {
   return request({
     url: '/flowable/process/variables',

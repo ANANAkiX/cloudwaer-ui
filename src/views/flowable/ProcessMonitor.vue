@@ -340,27 +340,56 @@
           <!-- 流程图 -->
           <el-tab-pane label="流程图" name="diagram">
             <div class="process-diagram">
-              <!-- 如果是SVG格式，直接渲染 -->
+              <!-- 优先使用 BPMN XML + bpmn-js 只读渲染（无左侧 palette） -->
+              <div v-if="processBpmnXml" class="bpmn-viewer-layout">
+                <div class="bpmn-viewer-canvas" ref="bpmnCanvasRef"></div>
+                <div class="bpmn-viewer-props">
+                  <el-card v-if="selectedBpmnElement">
+                    <template #header>
+                      <span>节点属性</span>
+                    </template>
+                    <el-form :model="selectedBpmnProps" label-width="90px" size="small">
+                      <el-form-item label="ID">
+                        <el-input v-model="selectedBpmnProps.id" disabled />
+                      </el-form-item>
+                      <el-form-item label="类型">
+                        <el-input v-model="selectedBpmnProps.type" disabled />
+                      </el-form-item>
+                      <el-form-item label="节点名称">
+                        <el-input v-model="selectedBpmnProps.name" disabled />
+                      </el-form-item>
+                      <el-form-item label="处理人" v-if="selectedBpmnProps.assignee">
+                        <el-input v-model="selectedBpmnProps.assignee" disabled />
+                      </el-form-item>
+                      <el-form-item label="候选用户" v-if="selectedBpmnProps.candidateUsers">
+                        <el-input v-model="selectedBpmnProps.candidateUsers" disabled />
+                      </el-form-item>
+                      <el-form-item label="候选组" v-if="selectedBpmnProps.candidateGroups">
+                        <el-input v-model="selectedBpmnProps.candidateGroups" disabled />
+                      </el-form-item>
+                      <el-form-item label="条件表达式" v-if="selectedBpmnProps.conditionExpression">
+                        <el-input v-model="selectedBpmnProps.conditionExpression" disabled />
+                      </el-form-item>
+                    </el-form>
+                  </el-card>
+                  <el-empty v-else description="点击流程节点查看属性" />
+                </div>
+              </div>
+
+              <!-- 兜底：仍可展示后端生成的 SVG -->
               <div
-                v-if="processDiagram && processDiagram.includes('<svg')"
+                v-else-if="processDiagram && processDiagram.includes('<svg')"
                 style="width: 100%; height: 600px; overflow: auto; border: 1px solid #ddd; background: white;"
               >
                 <div v-html="processDiagram"></div>
               </div>
 
-              <!-- 如果是BPMN XML，显示格式化的XML -->
+              <!-- BPMN XML 兜底：显示格式化的XML -->
               <pre
                 v-else-if="processDiagram && (processDiagram.includes('<bpmn:definitions') || processDiagram.includes('<definitions'))"
                 class="bpmn-xml"
               >{{ formatXml(processDiagram) }}</pre>
 
-              <!-- 显示原始内容用于调试 -->
-              <pre
-                v-else-if="processDiagram"
-                style="background: #f0f0f0; padding: 10px; font-size: 12px; max-height: 200px; overflow: auto;"
-              >{{ processDiagram.substring(0, 1000) }}{{ processDiagram.length > 1000 ? '...' : '' }}</pre>
-
-              <!-- 无流程图时显示占位符 -->
               <div v-else class="no-diagram">
                 <el-icon><Picture /></el-icon>
                 <p>暂无流程图</p>
@@ -428,7 +457,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, computed } from 'vue'
+import { ref, reactive, onMounted, computed, nextTick, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   Search, Refresh, List, Clock, VideoPlay, VideoPause, CircleCheck,
@@ -436,7 +465,9 @@ import {
 } from '@element-plus/icons-vue'
 import type { FlowableProcessInstance } from '@/api/flowable'
 import FcDesigner from '@/components/FcDesigner'
-import { deleteFlowableProcess, suspendFlowableProcess, activateFlowableProcess, restartFlowableProcess, terminateFlowableProcess, getProcessDiagram, getProcessVariables, getProcessHistory } from '@/api/flowable'
+import 'bpmn-js/dist/assets/diagram-js.css'
+import 'bpmn-js/dist/assets/bpmn-font/css/bpmn-embedded.css'
+import { deleteFlowableProcess, suspendFlowableProcess, activateFlowableProcess, restartFlowableProcess, terminateFlowableProcess, getProcessDiagram, getProcessVariables, getProcessHistory, getProcessBpmnXml } from '@/api/flowable'
 
 // 响应式数据
 const loading = ref(false)
@@ -471,6 +502,21 @@ const currentInstance = ref<FlowableProcessInstance | null>(null)
 
 // 流程图
 const processDiagram = ref<string>('')
+const processBpmnXml = ref<string>('')
+
+const bpmnCanvasRef = ref<HTMLElement | null>(null)
+let bpmnViewer: any = null
+
+const selectedBpmnElement = ref<any>(null)
+const selectedBpmnProps = reactive({
+  id: '',
+  name: '',
+  type: '',
+  assignee: '',
+  candidateUsers: '',
+  candidateGroups: '',
+  conditionExpression: ''
+})
 
 // 流程变量
 const processVariables = ref<any[]>([])
@@ -627,14 +673,17 @@ const viewInstanceDetail = async (row: FlowableProcessInstance) => {
   currentInstance.value = row
 
   try {
-    // 并行获取流程图、流程变量和操作历史
-    const [diagramResponse, variablesResponse, historyResponse] = await Promise.all([
+    // 并行获取流程图、流程变量和操作历史（流程图优先取 BPMN XML 用于只读渲染）
+    const [bpmnXmlResponse, diagramResponse, variablesResponse, historyResponse] = await Promise.all([
+      getProcessBpmnXml(row.id).catch(() => ''),
       getProcessDiagram(row.id),
       getProcessVariables(row.id),
       getProcessHistory(row.id)
     ])
 
-    // 设置流程图
+    processBpmnXml.value = typeof bpmnXmlResponse === 'string' ? bpmnXmlResponse : ''
+
+    // 设置流程图（兜底：SVG）
     processDiagram.value = diagramResponse
 
     // 设置流程变量
@@ -652,6 +701,8 @@ const viewInstanceDetail = async (row: FlowableProcessInstance) => {
 
     // 设置默认值以防API调用失败
     processDiagram.value = ''
+    processBpmnXml.value = ''
+    destroyBpmnViewer()
     processVariables.value = []
     resetFormView()
     operationHistory.value = []
@@ -882,6 +933,120 @@ const getTimelineType = (status?: string) => {
   }
 }
 
+const getFlowableAttr = (businessObject: any, name: string) => {
+  if (!businessObject) return ''
+  const direct = businessObject[name]
+  if (direct !== undefined && direct !== null && direct !== '') return String(direct)
+  const attrs = businessObject.$attrs
+  if (!attrs) return ''
+  const key = `flowable:${name}`
+  return attrs[key] ? String(attrs[key]) : ''
+}
+
+const updateSelectedBpmnProps = (element: any) => {
+  selectedBpmnElement.value = element || null
+  const bo = element?.businessObject
+  selectedBpmnProps.id = element?.id || ''
+  selectedBpmnProps.type = element?.type || ''
+  selectedBpmnProps.name = bo?.name || ''
+  selectedBpmnProps.assignee = getFlowableAttr(bo, 'assignee')
+  selectedBpmnProps.candidateUsers = getFlowableAttr(bo, 'candidateUsers')
+  selectedBpmnProps.candidateGroups = getFlowableAttr(bo, 'candidateGroups')
+  selectedBpmnProps.conditionExpression = bo?.conditionExpression ? String(bo.conditionExpression) : ''
+}
+
+const destroyBpmnViewer = () => {
+  try {
+    if (bpmnViewer && typeof bpmnViewer.destroy === 'function') {
+      bpmnViewer.destroy()
+    }
+  } catch (e) {
+    // ignore
+  } finally {
+    bpmnViewer = null
+  }
+}
+
+const initBpmnViewer = async (xml: string) => {
+  if (!xml || !xml.trim()) return
+  await nextTick()
+  if (!bpmnCanvasRef.value) return
+
+  destroyBpmnViewer()
+
+  const [{ default: NavigatedViewer }, { default: customTranslate }] = await Promise.all([
+    import('bpmn-js/lib/NavigatedViewer'),
+    import('./bpmn/translate')
+  ])
+
+  const customTranslateModule = {
+    translate: ['value', customTranslate]
+  }
+
+  bpmnViewer = new NavigatedViewer({
+    container: bpmnCanvasRef.value,
+    additionalModules: [customTranslateModule]
+  })
+
+  await bpmnViewer.importXML(xml)
+
+  const canvas = bpmnViewer.get('canvas')
+  canvas.zoom('fit-viewport')
+
+  const eventBus = bpmnViewer.get('eventBus')
+  eventBus.on('element.click', (event: any) => {
+    const el = event?.element
+    if (!el || !el.id) return
+
+    updateSelectedBpmnProps(el)
+
+    const selection = bpmnViewer.get('selection')
+    selection.select(el)
+
+    try {
+      const overlays = bpmnViewer.get('overlays')
+      overlays.clear()
+    } catch (e) {
+      // ignore
+    }
+  })
+}
+
+watch(
+  () => detailDialogVisible.value,
+  async (visible) => {
+    if (!visible) {
+      processBpmnXml.value = ''
+      updateSelectedBpmnProps(null)
+      destroyBpmnViewer()
+      return
+    }
+    if (activeTab.value === 'diagram' && processBpmnXml.value) {
+      await initBpmnViewer(processBpmnXml.value)
+    }
+  }
+)
+
+watch(
+  () => activeTab.value,
+  async (tab) => {
+    if (tab !== 'diagram') return
+    if (!detailDialogVisible.value) return
+    if (!processBpmnXml.value) return
+    await initBpmnViewer(processBpmnXml.value)
+  }
+)
+
+watch(
+  () => processBpmnXml.value,
+  async (xml) => {
+    if (!detailDialogVisible.value) return
+    if (activeTab.value !== 'diagram') return
+    if (!xml) return
+    await initBpmnViewer(xml)
+  }
+)
+
 const formatXml = (xml: string) => {
   // 简单的XML格式化方法
   try {
@@ -1104,13 +1269,39 @@ onMounted(() => {
   }
 
   .instance-detail {
-    .process-diagram {
-      text-align: center;
+     .process-diagram {
+       text-align: center;
 
-      .no-diagram {
-        padding: 40px;
-        color: #909399;
-      }
+       .bpmn-viewer-layout {
+         display: flex;
+         height: 600px;
+         border: 1px solid #ddd;
+         background: #fff;
+         overflow: hidden;
+       }
+
+       .bpmn-viewer-canvas {
+         flex: 1;
+         min-width: 0;
+       }
+
+       .bpmn-viewer-canvas :deep(.bjs-container) {
+         height: 100%;
+       }
+
+       .bpmn-viewer-props {
+         width: 320px;
+         border-left: 1px solid #ebeef5;
+         overflow: auto;
+         padding: 12px;
+         background: #fafafa;
+       }
+
+       .no-diagram {
+         padding: 40px;
+         color: #909399;
+       }
+
 
       .bpmn-canvas {
         background: #f8f9fa;
