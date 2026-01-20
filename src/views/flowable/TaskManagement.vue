@@ -146,13 +146,14 @@
             <span>{{ formatTime(scope.row.createTime) }}</span>
           </template>
         </el-table-column>
-        <el-table-column prop="dueDate" label="到期时间" min-width="160">
-          <template #default="scope">
-            <span :class="{ 'overdue': isOverdue(scope.row.dueDate) }">
-              {{ formatTime(scope.row.dueDate) }}
-            </span>
-          </template>
-        </el-table-column>
+         <el-table-column prop="dueTime" label="到期时间" min-width="160">
+           <template #default="scope">
+             <span :class="{ 'overdue': isOverdue(scope.row.dueTime) }">
+               {{ formatTime(scope.row.dueTime) }}
+             </span>
+           </template>
+         </el-table-column>
+
         <el-table-column prop="priority" label="优先级" width="100" align="center">
           <template #default="scope">
             <el-tag :type="getPriorityType(scope.row.priority)" size="small">
@@ -216,11 +217,12 @@
                     <el-tag v-else type="warning" size="small">未分配</el-tag>
                   </p>
                   <p><strong>创建时间:</strong> {{ formatTime(task.createTime) }}</p>
-                  <p><strong>到期时间:</strong> 
-                    <span :class="{ 'overdue': isOverdue(task.dueDate) }">
-                      {{ formatTime(task.dueDate) }}
-                    </span>
-                  </p>
+                   <p><strong>到期时间:</strong> 
+                     <span :class="{ 'overdue': isOverdue(task.dueTime) }">
+                       {{ formatTime(task.dueTime) }}
+                     </span>
+                   </p>
+
                 </div>
                 <div class="card-actions">
                   <el-button-group>
@@ -432,8 +434,9 @@
             {{ formatTime(currentTask.createTime) }}
           </el-descriptions-item>
           <el-descriptions-item label="到期时间">
-            {{ formatTime(currentTask.dueDate) }}
+            {{ formatTime(currentTask.dueTime) }}
           </el-descriptions-item>
+
           <el-descriptions-item label="优先级">
             <el-tag :type="getPriorityType(currentTask.priority)">
               {{ getPriorityText(currentTask.priority) }}
@@ -720,12 +723,13 @@ const updateStats = (data: FlowableTaskItem[]) => {
   
   stats.todo = data.filter(item => !item.endTime).length
   stats.done = data.filter(item => item.endTime).length
-  stats.overdue = data.filter(item => 
-    !item.endTime && item.dueDate && new Date(item.dueDate) < now
+  stats.overdue = data.filter(item =>
+    !item.endTime && item.dueTime && new Date(item.dueTime) < now
   ).length
-  stats.today = data.filter(item => 
-    item.dueDate && new Date(item.dueDate) >= today && new Date(item.dueDate) < tomorrow
+  stats.today = data.filter(item =>
+    item.dueTime && new Date(item.dueTime) >= today && new Date(item.dueTime) < tomorrow
   ).length
+
 }
 
 const handleSearch = () => {
@@ -924,10 +928,11 @@ const clearSelection = () => {
   selectedRows.value = []
 }
 
-const isOverdue = (dueDate?: string) => {
-  if (!dueDate) return false
-  return new Date(dueDate) < new Date()
+const isOverdue = (dueTime?: string) => {
+  if (!dueTime) return false
+  return new Date(dueTime) < new Date()
 }
+
 
 const getPriorityType = (priority?: number) => {
   switch (priority) {

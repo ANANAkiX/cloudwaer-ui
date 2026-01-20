@@ -270,6 +270,16 @@
             <el-option label="否" :value="false" />
           </el-select>
         </el-form-item>
+        <el-form-item label="结束时间" prop="endTime">
+          <el-date-picker
+            v-model="formData.endTime"
+            type="datetime"
+            placeholder="请选择结束时间"
+            format="YYYY-MM-DD HH:mm"
+            value-format="YYYY-MM-DDTHH:mm:ss"
+            style="width: 100%"
+          />
+        </el-form-item>
         <el-form-item label="描述" prop="remark">
           <el-input 
             v-model="formData.remark" 
@@ -522,6 +532,28 @@ const formRules = {
   ],
   isExecutable: [
     { required: true, message: '请选择是否可执行', trigger: 'change' }
+  ],
+  endTime: [
+    { required: true, message: '请选择结束时间', trigger: 'change' },
+    {
+      validator: (_rule: any, value: any, callback: any) => {
+        if (!value) {
+          callback()
+          return
+        }
+        const date = value instanceof Date ? value : new Date(value)
+        if (Number.isNaN(date.getTime())) {
+          callback(new Error('结束时间格式不正确'))
+          return
+        }
+        if (date.getTime() < Date.now()) {
+          callback(new Error('结束时间不能是过去的时间'))
+          return
+        }
+        callback()
+      },
+      trigger: 'change'
+    }
   ]
 }
 
@@ -638,6 +670,7 @@ const handleAdd = () => {
     category: '',
     remark: '',
     isExecutable: true,
+    endTime: '',
     bpmnXml: '',
     formJson: '',
     nodeActions: []
@@ -655,6 +688,7 @@ const handleEdit = async (row: FlowableModelListItem) => {
     formData.formJson = detail.formJson || ''
     formData.nodeActions = detail.nodeActions || []
     formData.remark = detail.remark ?? (detail as any).remake ?? formData.remark
+    formData.endTime = detail.endTime || (row as any).endTime || ''
     const parsedExecutable = parseIsExecutableFromXml(detail.bpmnXml)
     if (parsedExecutable !== null) {
       formData.isExecutable = parsedExecutable
@@ -664,6 +698,7 @@ const handleEdit = async (row: FlowableModelListItem) => {
   }
   dialogVisible.value = true
 }
+
 
 const handleSave = async () => {
   try {

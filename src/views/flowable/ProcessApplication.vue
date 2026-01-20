@@ -56,10 +56,7 @@
                     <el-icon><User/></el-icon>
                     {{ process.instanceCount || 0 }} 个实例
                   </span>
-                  <span class="stat-item">
-                    <el-icon><Clock/></el-icon>
-                    {{ process.avgDuration || '-' }} 平均时长
-                  </span>
+
                 </div>
               </div>
               <div class="process-actions">
@@ -110,14 +107,33 @@
             :rules="formRules"
             label-width="120px"
         >
-          <el-form-item label="业务Key" prop="businessKey">
-            <el-input
-                v-model="applicationForm.businessKey"
-                placeholder="请输入业务Key（可选）"
-            />
-          </el-form-item>
-          <el-divider />
-          <!-- 动态表单字段 -->
+           <el-form-item label="业务Key" prop="businessKey">
+             <el-input
+                 v-model="applicationForm.businessKey"
+                 placeholder="请输入业务Key（可选）"
+             />
+           </el-form-item>
+           <el-form-item label="任务优先级" prop="priority">
+             <el-select v-model="applicationForm.priority" placeholder="请选择任务优先级" style="width: 100%">
+               <el-option label="低级" value="low" />
+               <el-option label="正常" value="normal" />
+               <el-option label="紧急" value="urgent" />
+               <el-option label="非常紧急" value="very_urgent" />
+             </el-select>
+           </el-form-item>
+           <el-form-item label="结束时间" prop="dueTime">
+             <el-date-picker
+               v-model="applicationForm.dueTime"
+               type="datetime"
+               placeholder="请选择结束时间"
+               format="YYYY-MM-DD HH:mm"
+               value-format="YYYY-MM-DDTHH:mm:ss"
+               style="width: 100%"
+             />
+           </el-form-item>
+           <el-divider />
+           <!-- 动态表单字段 -->
+
           <template v-if="hasFormJson">
             <form-create
                 v-model="formCreateData"
@@ -179,9 +195,7 @@
           <el-descriptions-item label="实例数量">
             {{ currentProcess.instanceCount || 0 }}
           </el-descriptions-item>
-          <el-descriptions-item label="平均时长">
-            {{ currentProcess.avgDuration || '-' }}
-          </el-descriptions-item>
+
         </el-descriptions>
 
         <!-- 流程图预览 -->
@@ -201,8 +215,9 @@ import {
   Search, User, Clock, VideoPlay, View, UploadFilled,
   Document, Money, Setting, More
 } from '@element-plus/icons-vue'
-import {startFlowableProcess, getProcessDefinitions, getProcessDefinitionDetail} from '@/api/flowable'
-import type {FlowableProcessDefinition} from '@/api/flowable'
+import { startFlowableProcess, getProcessDefinitions, getProcessDefinitionDetail } from '@/api/flowable'
+import type { FlowableProcessDefinition } from '@/api/flowable'
+
 import {useDict} from '@/utils/dict'
 import FcDesigner from '@/components/FcDesigner'
 
@@ -236,8 +251,13 @@ const processList = ref<FlowableProcessDefinition[]>([])
 // 申请表单
 const applicationForm = reactive<Record<string, any>>({
   businessKey: '',
+  priority: 'normal',
+  dueTime: '',
   remark: ''
 })
+
+const currentModelEndTime = ref<string>('')
+
 
 // 表单字段配置
 const formJsonPayload = ref<any | null>(null)
@@ -254,7 +274,48 @@ const formRef = ref()
 const uploadUrl = '/api/upload'
 
 // 表单验证规则
-const formRules = computed(() => ({}))
+const formRules = computed(() => {
+  return {
+    businessKey: [
+      { pattern: /^[a-zA-Z0-9_-]*$/, message: '业务Key只能包含字母、数字、下划线和连字符', trigger: 'blur' }
+    ],
+    priority: [
+      { required: true, message: '请选择任务优先级', trigger: 'change' }
+    ],
+    dueTime: [
+      { required: true, message: '请选择结束时间', trigger: 'change' },
+      {
+        validator: (_rule: any, value: any, callback: any) => {
+          if (!value) {
+            callback()
+            return
+          }
+          const due = value instanceof Date ? value : new Date(value)
+          if (Number.isNaN(due.getTime())) {
+            callback(new Error('结束时间格式不正确'))
+            return
+          }
+          if (due.getTime() < Date.now()) {
+            callback(new Error('结束时间不能是过去的时间'))
+            return
+          }
+
+          if (currentModelEndTime.value && currentModelEndTime.value !== '-') {
+            const modelEnd = new Date(currentModelEndTime.value)
+            if (!Number.isNaN(modelEnd.getTime()) && due.getTime() > modelEnd.getTime()) {
+              callback(new Error('结束时间不能超过模型结束时间'))
+              return
+            }
+          }
+
+          callback()
+        },
+        trigger: 'change'
+      }
+    ]
+  }
+})
+
 
 const parseFormJsonPayload = (raw: any) => {
   if (!raw) return null
@@ -418,13 +479,22 @@ const openApplicationDialog = (process: FlowableProcessDefinition) => {
 
   Object.assign(applicationForm, {
     businessKey: '',
+    priority: 'normal',
+    dueTime: '',
     remark: ''
   })
+  currentModelEndTime.value = ''
+
+  if (process.endTime) {
+    currentModelEndTime.value = process.endTime
+    applicationForm.dueTime = process.endTime
+  }
 
   attachments.value = []
   applicationDialogVisible.value = true
 
 }
+
 
 
 const handleSubmitApplication = async () => {
@@ -444,9 +514,15 @@ const handleSubmitApplication = async () => {
       variables.formJson = formJson
     }
 
+    variables.priority = applicationForm.priority
+    if (applicationForm.dueTime) {
+      variables.dueTime = applicationForm.dueTime
+    }
+
     if (applicationForm.remark) {
       variables.remark = applicationForm.remark
     }
+
 
     if (attachments.value.length > 0) {
       variables.attachments = attachments.value.map(file => ({

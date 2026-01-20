@@ -326,9 +326,12 @@
                 {{ formatTime(currentInstance.endTime) }}
               </el-descriptions-item>
               <el-descriptions-item label="发起人">
-                <!-- {{ currentInstance.startUserId || '-' }} -->
-                <span>-</span>
+                <span>{{ currentInstance.starter || '-' }}</span>
               </el-descriptions-item>
+              <el-descriptions-item label="预期结束时间">
+                <span>{{ formatTime(currentInstance.dueTime) }}</span>
+              </el-descriptions-item>
+
               <el-descriptions-item label="状态">
                 <el-tag :type="getStatusType(currentInstance.status)">
                   {{ getStatusText(currentInstance.status) }}
@@ -467,7 +470,8 @@ import type { FlowableProcessInstance } from '@/api/flowable'
 import FcDesigner from '@/components/FcDesigner'
 import 'bpmn-js/dist/assets/diagram-js.css'
 import 'bpmn-js/dist/assets/bpmn-font/css/bpmn-embedded.css'
-import { deleteFlowableProcess, suspendFlowableProcess, activateFlowableProcess, restartFlowableProcess, terminateFlowableProcess, getProcessDiagram, getProcessVariables, getProcessHistory, getProcessBpmnXml } from '@/api/flowable'
+import { deleteFlowableProcess, suspendFlowableProcess, activateFlowableProcess, restartFlowableProcess, terminateFlowableProcess, getFlowableProcessDetail, getProcessDiagram, getProcessVariables, getProcessHistory, getProcessBpmnXml, getProcessHighlight } from '@/api/flowable'
+
 
 // 响应式数据
 const loading = ref(false)
@@ -504,8 +508,20 @@ const currentInstance = ref<FlowableProcessInstance | null>(null)
 const processDiagram = ref<string>('')
 const processBpmnXml = ref<string>('')
 
+const pendingHighlight = ref<{ activeActivityIds: string[]; completedActivityIds: string[]; completedFlowIds: string[] } | null>(null)
+
+
 const bpmnCanvasRef = ref<HTMLElement | null>(null)
 let bpmnViewer: any = null
+
+const COMPLETED_ACTIVITY_MARKER = 'cw-bpmn-completed-activity'
+const COMPLETED_FLOW_MARKER = 'cw-bpmn-completed-flow'
+const ACTIVE_ACTIVITY_MARKER = 'cw-bpmn-active-activity'
+
+let appliedCompletedActivityIds: string[] = []
+let appliedCompletedFlowIds: string[] = []
+let appliedActiveActivityIds: string[] = []
+
 
 const selectedBpmnElement = ref<any>(null)
 const selectedBpmnProps = reactive({
@@ -670,16 +686,26 @@ const handleCurrentChange = (current: number) => {
 }
 
 const viewInstanceDetail = async (row: FlowableProcessInstance) => {
-  currentInstance.value = row
+   currentInstance.value = row
+
+   // 拉取详情，确保 starter/dueTime 等字段是最新的
+   try {
+     currentInstance.value = await getFlowableProcessDetail(row.id)
+   } catch (e) {
+     // ignore
+   }
+
 
   try {
     // 并行获取流程图、流程变量和操作历史（流程图优先取 BPMN XML 用于只读渲染）
-    const [bpmnXmlResponse, diagramResponse, variablesResponse, historyResponse] = await Promise.all([
+    const [bpmnXmlResponse, diagramResponse, variablesResponse, historyResponse, highlightResponse] = await Promise.all([
       getProcessBpmnXml(row.id).catch(() => ''),
       getProcessDiagram(row.id),
       getProcessVariables(row.id),
-      getProcessHistory(row.id)
+      getProcessHistory(row.id),
+      getProcessHighlight(row.id).catch(() => ({ activeActivityIds: [], completedActivityIds: [], completedFlowIds: [] }))
     ])
+
 
     processBpmnXml.value = typeof bpmnXmlResponse === 'string' ? bpmnXmlResponse : ''
 
@@ -692,8 +718,12 @@ const viewInstanceDetail = async (row: FlowableProcessInstance) => {
     // 设置操作历史
     operationHistory.value = historyResponse
 
+    // 保存高亮数据（viewer 初始化后再应用）
+    pendingHighlight.value = highlightResponse
+
     // 显示对话框
     detailDialogVisible.value = true
+
 
   } catch (error) {
     console.error('获取流程详情失败:', error)
@@ -702,10 +732,12 @@ const viewInstanceDetail = async (row: FlowableProcessInstance) => {
     // 设置默认值以防API调用失败
     processDiagram.value = ''
     processBpmnXml.value = ''
+    pendingHighlight.value = null
     destroyBpmnViewer()
     processVariables.value = []
     resetFormView()
     operationHistory.value = []
+
   }
 }
 
@@ -955,8 +987,89 @@ const updateSelectedBpmnProps = (element: any) => {
   selectedBpmnProps.conditionExpression = bo?.conditionExpression ? String(bo.conditionExpression) : ''
 }
 
+const clearBpmnHighlights = () => {
+  if (!bpmnViewer) return
+  const canvas = bpmnViewer.get('canvas')
+  if (!canvas) return
+
+  for (const id of appliedCompletedActivityIds) {
+    try {
+      canvas.removeMarker(id, COMPLETED_ACTIVITY_MARKER)
+    } catch (e) {
+      // ignore
+    }
+  }
+  for (const id of appliedCompletedFlowIds) {
+    try {
+      canvas.removeMarker(id, COMPLETED_FLOW_MARKER)
+    } catch (e) {
+      // ignore
+    }
+  }
+  for (const id of appliedActiveActivityIds) {
+    try {
+      canvas.removeMarker(id, ACTIVE_ACTIVITY_MARKER)
+    } catch (e) {
+      // ignore
+    }
+  }
+
+  appliedCompletedActivityIds = []
+  appliedCompletedFlowIds = []
+  appliedActiveActivityIds = []
+}
+
+const applyBpmnHighlights = (payload: { activeActivityIds: string[]; completedActivityIds: string[]; completedFlowIds: string[] }) => {
+  if (!bpmnViewer) return
+  const canvas = bpmnViewer.get('canvas')
+  if (!canvas) return
+
+
+  const completedActivityIds = Array.isArray(payload?.completedActivityIds) ? payload.completedActivityIds : []
+  const completedFlowIds = Array.isArray(payload?.completedFlowIds) ? payload.completedFlowIds : []
+  const activeActivityIds = Array.isArray(payload?.activeActivityIds) ? payload.activeActivityIds : []
+
+  for (const id of completedActivityIds) {
+    try {
+      canvas.addMarker(id, COMPLETED_ACTIVITY_MARKER)
+    } catch (e) {
+      // ignore missing element ids
+    }
+  }
+  for (const id of completedFlowIds) {
+    try {
+      canvas.addMarker(id, COMPLETED_FLOW_MARKER)
+    } catch (e) {
+      // ignore missing element ids
+    }
+  }
+  for (const id of activeActivityIds) {
+    try {
+      canvas.addMarker(id, ACTIVE_ACTIVITY_MARKER)
+    } catch (e) {
+      // ignore missing element ids
+    }
+  }
+
+  appliedCompletedActivityIds = completedActivityIds
+  appliedCompletedFlowIds = completedFlowIds
+  appliedActiveActivityIds = activeActivityIds
+}
+
+const loadProcessHighlight = async (processInstanceId: string) => {
+  if (!processInstanceId) return
+  try {
+    const highlight = await getProcessHighlight(processInstanceId)
+    applyBpmnHighlights(highlight)
+  } catch (e) {
+    console.warn('获取流程高亮失败:', e)
+  }
+}
+
+
 const destroyBpmnViewer = () => {
   try {
+    clearBpmnHighlights()
     if (bpmnViewer && typeof bpmnViewer.destroy === 'function') {
       bpmnViewer.destroy()
     }
@@ -966,6 +1079,7 @@ const destroyBpmnViewer = () => {
     bpmnViewer = null
   }
 }
+
 
 const initBpmnViewer = async (xml: string) => {
   if (!xml || !xml.trim()) return
@@ -993,6 +1107,13 @@ const initBpmnViewer = async (xml: string) => {
   const canvas = bpmnViewer.get('canvas')
   canvas.zoom('fit-viewport')
 
+  if (pendingHighlight.value) {
+    applyBpmnHighlights(pendingHighlight.value)
+  } else if (currentInstance.value?.id) {
+    await loadProcessHighlight(currentInstance.value.id)
+  }
+
+
   const eventBus = bpmnViewer.get('eventBus')
   eventBus.on('element.click', (event: any) => {
     const el = event?.element
@@ -1017,13 +1138,16 @@ watch(
   async (visible) => {
     if (!visible) {
       processBpmnXml.value = ''
+      pendingHighlight.value = null
       updateSelectedBpmnProps(null)
       destroyBpmnViewer()
       return
     }
+
     if (activeTab.value === 'diagram' && processBpmnXml.value) {
       await initBpmnViewer(processBpmnXml.value)
     }
+
   }
 )
 
@@ -1034,6 +1158,7 @@ watch(
     if (!detailDialogVisible.value) return
     if (!processBpmnXml.value) return
     await initBpmnViewer(processBpmnXml.value)
+
   }
 )
 
@@ -1044,6 +1169,7 @@ watch(
     if (activeTab.value !== 'diagram') return
     if (!xml) return
     await initBpmnViewer(xml)
+
   }
 )
 
@@ -1290,12 +1416,41 @@ onMounted(() => {
        }
 
        .bpmn-viewer-props {
-         width: 320px;
-         border-left: 1px solid #ebeef5;
-         overflow: auto;
-         padding: 12px;
-         background: #fafafa;
-       }
+          width: 320px;
+          border-left: 1px solid #ebeef5;
+          overflow: auto;
+          padding: 12px;
+          background: #fafafa;
+        }
+
+        /* bpmn-js canvas markers (canvas.addMarker) */
+        :deep(.cw-bpmn-completed-activity .djs-visual) {
+          opacity: 0.45;
+        }
+
+        :deep(.cw-bpmn-completed-activity .djs-visual > :first-child) {
+          fill: #f5f6f8;
+          stroke: #c7ccd4;
+        }
+
+        :deep(.cw-bpmn-completed-activity .djs-label) {
+          fill: #9aa1ab;
+        }
+
+        :deep(.cw-bpmn-completed-flow .djs-visual > path) {
+          stroke: #c7ccd4;
+          opacity: 0.55;
+        }
+
+        :deep(.cw-bpmn-active-activity .djs-visual > :first-child) {
+          stroke: #1f2937;
+          stroke-width: 3px;
+        }
+
+        :deep(.cw-bpmn-active-activity .djs-visual) {
+          filter: drop-shadow(0 2px 6px rgba(17, 24, 39, 0.16));
+        }
+
 
        .no-diagram {
          padding: 40px;

@@ -17,6 +17,7 @@ export interface FlowableModelListItem {
   version?: number
   modelStatus?: number
   updateTime?: string
+  endTime?: string
 }
 
 export interface FlowableModelDetail {
@@ -32,6 +33,7 @@ export interface FlowableModelDetail {
   formJson?: string
   isExecutable?: boolean
   updateTime?: string
+  endTime?: string
 }
 
 export interface FlowableProcessDefinition {
@@ -44,11 +46,13 @@ export interface FlowableProcessDefinition {
   diagram?: string
   instanceCount?: number
   avgDuration?: string
+  endTime?: string
   createTime?: string
   updateTime?: string
   formJson?: string
   formFields?: FormField[]
 }
+
 
 export interface FormField {
   id: string
@@ -71,6 +75,8 @@ export interface FlowableProcessInstance {
   startTime?: string
   endTime?: string
   status?: string
+  starter?: string
+  dueTime?: string
 }
 
 export interface FlowableTaskItem {
@@ -79,11 +85,14 @@ export interface FlowableTaskItem {
   taskDefinitionKey?: string
   processInstanceId?: string
   processDefinitionKey?: string
+  processDefinitionName?: string
   businessKey?: string
   assignee?: string
   createTime?: string
   endTime?: string
   status?: string
+  priority?: string
+  dueTime?: string
 }
 
 export function getFlowableModelsByPage(params: PageParams): Promise<PageResult<FlowableModelListItem>> {
@@ -261,9 +270,17 @@ export function getProcessVariables(id: string): Promise<Array<{ name: string; t
   })
 }
 
-export function getProcessHistory(id: string): Promise<Array<{ id: string; userName: string; action: string; time: string; endTime?: string; duration: string; comment: string }>> {
+export function getProcessHistory(id: string): Promise<Array<{ id: string; userName: string; action: string; time: string; endTime?: string; duration: string; comment: string; type?: string }>> {
   return request({
     url: '/flowable/process/history',
+    method: 'get',
+    params: { processInstanceId: id }
+  })
+}
+
+export function getProcessHighlight(id: string): Promise<{ activeActivityIds: string[]; completedActivityIds: string[]; completedFlowIds: string[] }> {
+  return request({
+    url: '/flowable/process/highlight',
     method: 'get',
     params: { processInstanceId: id }
   })

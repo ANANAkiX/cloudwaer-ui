@@ -12,7 +12,9 @@ export interface FlowableModelListItem {
   remark?: string
   createTime?: string
   updateTime?: string
+  endTime?: string
 }
+
 
 // 模型详情
 export interface FlowableModelDetail {
@@ -29,7 +31,9 @@ export interface FlowableModelDetail {
   remark?: string
   createTime?: string
   updateTime?: string
+  endTime?: string
 }
+
 
 // 保存模型
 export interface ModelSaveDTO {
@@ -41,7 +45,9 @@ export interface ModelSaveDTO {
   formJson?: string
   nodeActions?: any[]
   remark?: string
+  endTime: string
 }
+
 
 // 发布模型
 export interface ModelPublishDTO {
@@ -74,6 +80,7 @@ export function getModelDetail(id: number): Promise<FlowableModelDetail> {
     params: { id }
   })
 }
+
 
 // 保存模型
 export function saveModel(data: ModelSaveDTO): Promise<number> {
