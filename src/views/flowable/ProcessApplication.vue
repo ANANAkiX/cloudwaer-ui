@@ -113,14 +113,17 @@
                  placeholder="请输入业务Key（可选）"
              />
            </el-form-item>
-           <el-form-item label="任务优先级" prop="priority">
-             <el-select v-model="applicationForm.priority" placeholder="请选择任务优先级" style="width: 100%">
-               <el-option label="低级" value="low" />
-               <el-option label="正常" value="normal" />
-               <el-option label="紧急" value="urgent" />
-               <el-option label="非常紧急" value="very_urgent" />
-             </el-select>
-           </el-form-item>
+            <el-form-item label="任务优先级" prop="priority">
+              <DictSelect
+                v-model="applicationForm.priority"
+                type="flowable_priority"
+                value-field="value"
+                label-field="label"
+                placeholder="请选择任务优先级"
+                style="width: 100%"
+              />
+            </el-form-item>
+
            <el-form-item label="结束时间" prop="dueTime">
              <el-date-picker
                v-model="applicationForm.dueTime"
@@ -218,8 +221,10 @@ import {
 import { startFlowableProcess, getProcessDefinitions, getProcessDefinitionDetail } from '@/api/flowable'
 import type { FlowableProcessDefinition } from '@/api/flowable'
 
-import {useDict} from '@/utils/dict'
+import { useDict } from '@/utils/dict'
+import DictSelect from '@/components/DictSelect.vue'
 import FcDesigner from '@/components/FcDesigner'
+
 
 // 响应式数据
 const loading = ref(false)

@@ -39,24 +39,25 @@
       >
         <el-table-column prop="permissionName" label="权限名称" width="200" align="center" />
         <el-table-column prop="permissionCode" label="权限编码" width="200" align="center" />
-        <el-table-column prop="permissionType" label="权限类型" width="120" align="center">
-          <template #default="scope">
-            <el-tag v-if="scope.row.permissionType === 1" type="success">菜单</el-tag>
-            <el-tag v-else-if="scope.row.permissionType === 2" type="warning">页面</el-tag>
-            <el-tag v-else-if="scope.row.permissionType === 3" type="info">操作</el-tag>
-          </template>
-        </el-table-column>
+         <el-table-column prop="permissionType" label="权限类型" width="120" align="center">
+           <template #default="scope">
+             <el-tag :type="getPermissionTypeTag(scope.row.permissionType)">
+               {{ dictLabelByValue('permission_type', scope.row.permissionType) }}
+             </el-tag>
+           </template>
+         </el-table-column>
+
         <el-table-column prop="routePath" label="路由路径" width="200" align="center" />
         <el-table-column prop="apiUrl" label="API地址" width="200" align="center" />
-        <el-table-column prop="httpMethod" label="请求类型" width="100" align="center">
-          <template #default="scope">
-            <el-tag v-if="scope.row.httpMethod === 'GET'" type="success">GET</el-tag>
-            <el-tag v-else-if="scope.row.httpMethod === 'POST'" type="primary">POST</el-tag>
-            <el-tag v-else-if="scope.row.httpMethod === 'PUT'" type="warning">PUT</el-tag>
-            <el-tag v-else-if="scope.row.httpMethod === 'DELETE'" type="danger">DELETE</el-tag>
-            <span v-else>-</span>
-          </template>
-        </el-table-column>
+         <el-table-column prop="httpMethod" label="请求类型" width="100" align="center">
+           <template #default="scope">
+             <el-tag v-if="scope.row.httpMethod" :type="getHttpMethodTag(scope.row.httpMethod)">
+               {{ dictLabelByValue('http_method', scope.row.httpMethod) }}
+             </el-tag>
+             <span v-else>-</span>
+           </template>
+         </el-table-column>
+
         <el-table-column prop="icon" label="图标" width="120" align="center">
           <template #default="scope">
             <el-icon v-if="scope.row.icon" :size="20">
@@ -99,13 +100,18 @@
         <el-form-item label="权限编码" prop="permissionCode">
           <el-input v-model="formData.permissionCode" placeholder="请输入权限编码" />
         </el-form-item>
-        <el-form-item label="权限类型" prop="permissionType">
-          <el-select v-model="formData.permissionType" placeholder="请选择权限类型" style="width: 100%" @change="handlePermissionTypeChange">
-            <el-option label="菜单" :value="1" />
-            <el-option label="页面" :value="2" />
-            <el-option label="操作" :value="3" />
-          </el-select>
-        </el-form-item>
+         <el-form-item label="权限类型" prop="permissionType">
+           <DictSelect
+             v-model="formData.permissionType"
+             type="permission_type"
+             value-field="value"
+             label-field="label"
+             placeholder="请选择权限类型"
+             style="width: 100%"
+             @change="handlePermissionTypeChange"
+           />
+         </el-form-item>
+
         <el-form-item label="父权限" prop="parentId">
           <el-tree-select
             v-model="formData.parentId"
@@ -126,12 +132,15 @@
         </el-form-item>
         <template v-if="formData.permissionType === 3">
           <el-form-item label="请求类型" prop="httpMethod">
-            <el-select v-model="formData.httpMethod" placeholder="请选择请求类型" clearable style="width: 100%">
-              <el-option label="GET" value="GET" />
-              <el-option label="POST" value="POST" />
-              <el-option label="PUT" value="PUT" />
-              <el-option label="DELETE" value="DELETE" />
-            </el-select>
+            <DictSelect
+              v-model="formData.httpMethod"
+              type="http_method"
+              value-field="value"
+              label-field="label"
+              placeholder="请选择请求类型"
+              clearable
+              style="width: 100%"
+            />
           </el-form-item>
           <el-form-item label="API地址" prop="apiUrl">
             <el-input
@@ -232,6 +241,9 @@ import * as ElementPlusIconsVue from '@element-plus/icons-vue'
 import { getPermissionTree, savePermission, updatePermission, deletePermission } from '@/api/permission.ts'
 import { getAllServiceApis, getServiceApis } from '@/api/scanner.ts'
 import IconSelector from '@/components/IconSelector.vue'
+import DictSelect from '@/components/DictSelect.vue'
+import { useDict } from '@/utils/dict'
+
 import { checkButtonPermission } from '@/utils/permission'
 import { PermissionInfo, ServiceInfo, ApiInfo } from '@/types'
 
@@ -244,6 +256,30 @@ const tableData = ref<PermissionInfo[]>([])
 const flatTreeOptions = ref<any[]>([])
 const searchKeyword = ref<string>('')
 const tableRef = ref<any>(null)
+
+const { dicts: permissionDicts } = useDict(['permission_type', 'http_method'])
+
+const dictLabelByValue = (type: string, value: any) => {
+  const list = permissionDicts.value[type] || []
+  const strVal = value == null ? '' : String(value)
+  const found = list.find(item => String(item.value) === strVal || String(item.code) === strVal)
+  return found?.label || '-'
+}
+
+const getPermissionTypeTag = (permissionType: number) => {
+  if (permissionType === 1) return 'success'
+  if (permissionType === 2) return 'warning'
+  if (permissionType === 3) return 'info'
+  return 'info'
+}
+
+const getHttpMethodTag = (method: string) => {
+  if (method === 'GET') return 'success'
+  if (method === 'POST') return 'primary'
+  if (method === 'PUT') return 'warning'
+  if (method === 'DELETE') return 'danger'
+  return 'info'
+}
 
 // 权限检查
 const canAdd = computed(() => checkButtonPermission('permission', 'admin:permission:add'))

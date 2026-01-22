@@ -323,8 +323,9 @@
                 {{ formatTime(currentInstance.startTime) }}
               </el-descriptions-item>
               <el-descriptions-item label="结束时间">
-                {{ formatTime(currentInstance.endTime) }}
+                {{ formatProcessEndTime(currentInstance.endTime, currentInstance.dueTime) }}
               </el-descriptions-item>
+
               <el-descriptions-item label="发起人">
                 <span>{{ currentInstance.starter || '-' }}</span>
               </el-descriptions-item>
@@ -503,6 +504,19 @@ const stats = reactive({
 
 // 当前实例
 const currentInstance = ref<FlowableProcessInstance | null>(null)
+
+const formatTime = (time?: string) => {
+  if (!time) return '-'
+  return new Date(time).toLocaleString()
+}
+
+// 结束时间展示规则：优先实际结束时间(endTime)，未结束则展示申请时填的预期结束时间(dueTime)
+const formatProcessEndTime = (endTime?: string, dueTime?: string) => {
+  if (endTime) return formatTime(endTime)
+  if (dueTime) return formatTime(dueTime)
+  return '-'
+}
+
 
 // 流程图
 const processDiagram = ref<string>('')
@@ -848,7 +862,24 @@ const showOperationHistory = (row: FlowableProcessInstance) => {
   viewInstanceDetail(row)
 }
 
+const formatDuration = (startTime?: string, endTime?: string) => {
+  if (!startTime) return '-'
+  const start = new Date(startTime)
+  const end = endTime ? new Date(endTime) : new Date()
+  const diff = end.getTime() - start.getTime()
+  if (Number.isNaN(diff) || diff < 0) return '-'
+  const seconds = Math.floor(diff / 1000)
+  const minutes = Math.floor(seconds / 60)
+  const hours = Math.floor(minutes / 60)
+  const days = Math.floor(hours / 24)
+  if (days > 0) return `${days}d ${hours % 24}h`
+  if (hours > 0) return `${hours}h ${minutes % 60}m`
+  if (minutes > 0) return `${minutes}m`
+  return `${seconds}s`
+}
+
 const handleDelete = async (row: FlowableProcessInstance) => {
+
   try {
     await ElMessageBox.confirm('确定要删除此流程实例吗？删除后不可恢复！', '警告', {
       confirmButtonText: '确定',
@@ -1222,29 +1253,7 @@ const getHistoryType = (type: string) => {
   }
 }
 
-const formatTime = (time?: string) => {
-  if (!time) return '-'
-  return new Date(time).toLocaleString()
-}
 
-const formatDuration = (startTime?: string, endTime?: string) => {
-  if (!startTime) return '-'
-
-  const start = new Date(startTime)
-  const end = endTime ? new Date(endTime) : new Date()
-  const duration = end.getTime() - start.getTime()
-
-  const hours = Math.floor(duration / (1000 * 60 * 60))
-  const minutes = Math.floor((duration % (1000 * 60 * 60)) / (1000 * 60))
-
-  if (hours > 0) {
-    return `${hours}小时${minutes}分钟`
-  } else if (minutes > 0) {
-    return `${minutes}分钟`
-  } else {
-    return '不到1分钟'
-  }
-}
 
 // 生命周期
 onMounted(() => {

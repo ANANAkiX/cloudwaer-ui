@@ -13,13 +13,79 @@ body {
   height: 100vh;
 }
 
+:root {
+  --cw-bg: #f5f7fb;
+  --cw-surface: #ffffff;
+  --cw-border: #e9edf3;
+  --cw-text: #111827;
 
+  /* chrome + interactions (keep light mode unchanged) */
+  --cw-accent: #1f6feb;
+  --cw-control-bg: #f3f6fb;
+  --cw-control-bg-hover: #e9f2ff;
+  --cw-control-text: #4b5563;
 
+  /* tabs */
+  --cw-tabs-border: #eef2f7;
+  --cw-tab-bg: #f6f8fb;
+  --cw-tab-bg-hover: #ffffff;
+  --cw-tab-border: #e5e9f2;
+  --cw-tab-text: #4b5563;
+  --cw-tab-active-bg: #ffffff;
+  --cw-tab-active-border: #c9d7ef;
+  --cw-tab-active-text: #1f6feb;
+}
 
+html.dark {
+  color-scheme: dark;
+  --cw-bg: #0b1220;
+  --cw-surface: #0f172a;
+  --cw-border: rgba(148, 163, 184, 0.16);
+  --cw-text: #e5e7eb;
 
+  /* chrome + interactions */
+  --cw-accent: #60a5fa;
+  --cw-control-bg: rgba(96, 165, 250, 0.12);
+  --cw-control-bg-hover: rgba(96, 165, 250, 0.18);
+  --cw-control-text: #cbd5e1;
 
+  /* tabs */
+  --cw-tabs-border: rgba(148, 163, 184, 0.16);
+  --cw-tab-bg: rgba(148, 163, 184, 0.1);
+  --cw-tab-bg-hover: rgba(148, 163, 184, 0.16);
+  --cw-tab-border: rgba(148, 163, 184, 0.2);
+  --cw-tab-text: #cbd5e1;
+  --cw-tab-active-bg: rgba(96, 165, 250, 0.14);
+  --cw-tab-active-border: rgba(96, 165, 250, 0.35);
+  --cw-tab-active-text: #60a5fa;
 
+  /* Element Plus dark tokens -> blue-tinted darks */
+  --el-color-primary: var(--cw-accent);
+  --el-bg-color: var(--cw-bg);
+  --el-bg-color-page: var(--cw-bg);
+  --el-bg-color-overlay: var(--cw-surface);
+  --el-fill-color-blank: var(--cw-surface);
+  --el-fill-color-light: rgba(148, 163, 184, 0.08);
+  --el-fill-color-lighter: rgba(148, 163, 184, 0.06);
+  --el-border-color: var(--cw-border);
+  --el-border-color-light: rgba(148, 163, 184, 0.14);
+  --el-border-color-lighter: rgba(148, 163, 184, 0.12);
+  --el-text-color-primary: var(--cw-text);
+  --el-text-color-regular: #cbd5e1;
+  --el-text-color-secondary: #94a3b8;
 
+  /* menu poppers (submenus / dropdown-like menus) */
+  --el-menu-bg-color: var(--cw-surface);
+  --el-menu-text-color: #cbd5e1;
+  --el-menu-hover-text-color: var(--cw-accent);
+  --el-menu-active-color: var(--cw-accent);
+  --el-menu-hover-bg-color: rgba(96, 165, 250, 0.12);
+  --el-menu-border-color: rgba(255, 255, 255, 0.08);
+}
 
+body {
+  background: var(--cw-bg);
+  color: var(--cw-text);
+}
 
 

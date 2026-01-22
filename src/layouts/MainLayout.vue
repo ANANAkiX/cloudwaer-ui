@@ -53,9 +53,37 @@
             <button class="header-action-btn" type="button" @click="toggleFullscreen">
               <el-icon><FullScreen /></el-icon>
             </button>
-            <button class="header-action-btn" type="button">
-              <el-icon><Setting /></el-icon>
-            </button>
+             <el-dropdown trigger="click" placement="bottom-end">
+               <button class="header-action-btn" type="button">
+                 <el-icon><Setting /></el-icon>
+               </button>
+               <template #dropdown>
+                 <el-dropdown-menu class="settings-dropdown">
+                   <el-dropdown-item disabled>
+                     <span class="settings-title">{{ t('settings.title') }}</span>
+                   </el-dropdown-item>
+                   <el-dropdown-item divided>
+                     <div class="settings-row">
+                       <span class="settings-label">{{ t('settings.theme') }}</span>
+                       <el-switch
+                         v-model="isDark"
+                         :active-text="t('settings.dark')"
+                         :inactive-text="t('settings.light')"
+                       />
+                     </div>
+                   </el-dropdown-item>
+                   <el-dropdown-item>
+                     <div class="settings-row">
+                       <span class="settings-label">{{ t('settings.language') }}</span>
+                       <el-select v-model="locale" size="small" style="width: 120px">
+                         <el-option v-for="l in availableLocales" :key="l" :label="l" :value="l" />
+                       </el-select>
+                     </div>
+                   </el-dropdown-item>
+                 </el-dropdown-menu>
+               </template>
+             </el-dropdown>
+
           </div>
           <el-dropdown @command="handleCommand" trigger="click">
             <span class="user-avatar">
@@ -118,6 +146,8 @@
 
 <script setup>
 import { computed, ref, onMounted, watch } from 'vue'
+import { useAppStore } from '@/stores/app'
+import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { useTabsStore } from '@/stores/tabs'
@@ -139,6 +169,8 @@ const route = useRoute()
 const router = useRouter()
 const userStore = useUserStore()
 const tabsStore = useTabsStore()
+const appStore = useAppStore()
+const { t } = useI18n()
 
 const isCollapse = ref(false)
 const refreshKey = ref(0)
@@ -156,6 +188,18 @@ const dashboardRoute = {
     icon: 'House'
   }
 }
+
+const isDark = computed({
+  get: () => appStore.theme === 'dark',
+  set: (val) => appStore.setTheme(val ? 'dark' : 'light')
+})
+
+const locale = computed({
+  get: () => appStore.locale,
+  set: (val) => appStore.setAppLocale(val)
+})
+
+const availableLocales = computed(() => appStore.availableLocales)
 
 // 标签页相关
 const tabs = computed(() => tabsStore.tabs)
@@ -311,7 +355,7 @@ onMounted(() => {
 <style scoped>
 .layout-container {
   height: 100vh;
-  background-color: #f5f7fb;
+  background-color: var(--cw-bg);
 }
 
 .sidebar {
@@ -319,6 +363,10 @@ onMounted(() => {
   overflow: hidden;
   transition: width 0.3s;
   box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.05);
+}
+
+html.dark .sidebar {
+  background: linear-gradient(180deg, #0f172a 0%, #0b1220 100%);
 }
 
 .logo {
@@ -330,6 +378,10 @@ onMounted(() => {
   color: #fff;
   font-weight: 600;
   background: rgba(7, 20, 33, 0.65);
+}
+
+html.dark .logo {
+  background: rgba(15, 23, 42, 0.75);
 }
 
 .logo-icon {
@@ -359,6 +411,10 @@ onMounted(() => {
   padding: 6px 0 12px;
 }
 
+html.dark .sidebar-menu {
+  background: transparent;
+}
+
 .sidebar-menu:not(.el-menu--collapse) {
   width: 220px;
 }
@@ -366,6 +422,14 @@ onMounted(() => {
 .sidebar :deep(.el-menu) {
   background-color: transparent;
   border-right: none;
+}
+
+html.dark .sidebar :deep(.el-menu) {
+  --el-menu-bg-color: transparent;
+  --el-menu-text-color: #cbd5e1;
+  --el-menu-hover-text-color: var(--cw-accent);
+  --el-menu-active-color: #ffffff;
+  --el-menu-hover-bg-color: rgba(96, 165, 250, 0.12);
 }
 
 .sidebar :deep(.el-menu-item),
@@ -434,13 +498,18 @@ onMounted(() => {
 
 .header {
   height: 56px;
-  background-color: #fff;
-  border-bottom: 1px solid #e9edf3;
+  background-color: var(--cw-surface);
+  border-bottom: 1px solid var(--cw-border);
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 0 16px;
   box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+}
+
+html.dark .header {
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.98) 0%, rgba(15, 23, 42, 0.92) 100%);
+  box-shadow: 0 1px 0 rgba(148, 163, 184, 0.12);
 }
 
 .header-left {
@@ -463,6 +532,16 @@ onMounted(() => {
 .header-icon:hover {
   color: #1f6feb;
   background: #e9f2ff;
+}
+
+html.dark .header-icon {
+  color: var(--cw-control-text);
+  background: var(--cw-control-bg);
+}
+
+html.dark .header-icon:hover {
+  color: #e5e7eb;
+  background: var(--cw-control-bg-hover);
 }
 
 .header-breadcrumb {
@@ -490,14 +569,54 @@ onMounted(() => {
   width: 32px;
   height: 32px;
   border-radius: 8px;
-  border: 1px solid #eef1f6;
-  background: #fff;
+  border: 1px solid var(--cw-border);
+  background: var(--cw-surface);
   color: #4b5563;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: all 0.2s ease;
+}
+
+html.dark .header-action-btn {
+  color: #cbd5e1;
+}
+
+html.dark .header-action-btn:hover {
+  color: #e5e7eb;
+  border-color: rgba(96, 165, 250, 0.35);
+  background: rgba(96, 165, 250, 0.12);
+}
+
+.settings-dropdown {
+  min-width: 240px;
+}
+
+.settings-title {
+  font-weight: 600;
+  color: #111827;
+}
+
+html.dark .settings-title {
+  color: #e5e7eb;
+}
+
+.settings-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.settings-label {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+html.dark .settings-label {
+  color: #94a3b8;
 }
 
 .header-action-btn:hover {
@@ -521,12 +640,16 @@ onMounted(() => {
 }
 
 .tabs-container {
-  background-color: #fff;
+  background-color: var(--cw-surface);
   display: flex;
   align-items: center;
   padding: 0 16px;
   min-height: 44px;
-  border-bottom: 1px solid #eef2f7;
+  border-bottom: 1px solid var(--cw-tabs-border);
+}
+
+html.dark .tabs-container {
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.9) 0%, rgba(11, 18, 32, 0.65) 100%);
 }
 
 .tabs-wrapper {
@@ -602,27 +725,27 @@ onMounted(() => {
   padding: 0 12px;
   margin-top: 7px;
   margin-right: 8px;
-  border: 1px solid #e5e9f2;
+  border: 1px solid var(--cw-tab-border);
   border-radius: 8px;
-  background: #f6f8fb;
-  color: #4b5563;
+  background: var(--cw-tab-bg);
+  color: var(--cw-tab-text);
   transition: all 0.2s ease;
 }
 
 .tabs-container :deep(.el-tabs__item.is-active) {
-  background-color: #fff;
-  color: #1f6feb;
-  border-color: #c9d7ef;
+  background-color: var(--cw-tab-active-bg);
+  color: var(--cw-tab-active-text);
+  border-color: var(--cw-tab-active-border);
   box-shadow: 0 1px 2px rgba(16, 24, 40, 0.08);
 }
 
 .tabs-container :deep(.el-tabs__item:hover) {
-  color: #1f6feb;
-  background: #fff;
+  color: var(--cw-tab-active-text);
+  background: var(--cw-tab-bg-hover);
 }
 
 .tabs-container :deep(.el-tabs__item.is-active:hover) {
-  color: #1f6feb;
+  color: var(--cw-tab-active-text);
 }
 
 .tabs-container :deep(.el-tabs__item .el-icon-close) {
@@ -631,11 +754,11 @@ onMounted(() => {
 }
 
 .tabs-container :deep(.el-tabs__item.is-active .el-icon-close) {
-  color: #1f6feb;
+  color: var(--cw-tab-active-text);
 }
 
 .tabs-container :deep(.el-tabs__item.is-active .el-icon-close:hover) {
-  background-color: rgba(31, 111, 235, 0.1);
+  background-color: color-mix(in srgb, var(--cw-tab-active-text) 18%, transparent);
   border-radius: 50%;
 }
 
@@ -649,11 +772,11 @@ onMounted(() => {
 .tabs-dropdown-btn {
   padding: 4px 8px;
   border-radius: 6px;
-  background: #f6f8fb;
+  background: color-mix(in srgb, var(--cw-surface) 84%, var(--cw-bg));
 }
 
 .main-content {
-  background-color: #f5f7fb;
+  background-color: var(--cw-bg);
   padding: 20px;
   overflow-y: auto;
   height: calc(100vh - 100px);

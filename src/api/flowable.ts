@@ -1,6 +1,9 @@
 import request from './request.ts'
 import type { PageParams, PageResult } from '@/types'
 
+/**
+ * Flowable 节点动作配置
+ */
 export interface FlowableNodeAction {
   nodeId: string
   nodeName: string
@@ -9,6 +12,9 @@ export interface FlowableNodeAction {
   actionConfig: string
 }
 
+/**
+ * Flowable 模型列表项
+ */
 export interface FlowableModelListItem {
   id: string | number
   modelKey: string

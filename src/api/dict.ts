@@ -1,5 +1,8 @@
 import request from './request.ts'
 
+/**
+ * 字典项
+ */
 export interface DictItem {
   id?: string | number
   dictId?: string | number
@@ -11,6 +14,9 @@ export interface DictItem {
   description?: string
 }
 
+/**
+ * 字典
+ */
 export interface Dict {
   id?: string | number
   type: string
@@ -21,6 +27,9 @@ export interface Dict {
   items?: DictItem[]
 }
 
+/**
+ * 按 type 获取字典项列表
+ */
 export const getDictByType = (type: string): Promise<DictItem[]> => {
   return request({
     url: `/admin/dict/list`,
@@ -29,6 +38,9 @@ export const getDictByType = (type: string): Promise<DictItem[]> => {
   })
 }
 
+/**
+ * 刷新字典缓存
+ */
 export const refreshDict = (): Promise<boolean> => {
   return request({
     url: `/admin/dict/refresh`,
