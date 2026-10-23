@@ -48,15 +48,6 @@
          </el-table-column>
 
         <el-table-column prop="routePath" label="路由路径" width="200" align="center" />
-        <el-table-column prop="apiUrl" label="API地址" width="200" align="center" />
-         <el-table-column prop="httpMethod" label="请求类型" width="100" align="center">
-           <template #default="scope">
-             <el-tag v-if="scope.row.httpMethod" :type="getHttpMethodTag(scope.row.httpMethod)">
-               {{ dictLabelByValue('http_method', scope.row.httpMethod) }}
-             </el-tag>
-             <span v-else>-</span>
-           </template>
-         </el-table-column>
 
         <el-table-column prop="icon" label="图标" width="120" align="center">
           <template #default="scope">
@@ -124,36 +115,12 @@
           />
         </el-form-item>
         <el-form-item 
-          v-if="formData.permissionType === 1 || formData.permissionType === 2" 
+          v-if="Number(formData.permissionType) === 1 || Number(formData.permissionType) === 2"
           label="路由路径" 
           prop="routePath"
         >
           <el-input v-model="formData.routePath" placeholder="请输入路由路径（菜单/页面权限需要）" />
         </el-form-item>
-        <template v-if="formData.permissionType === 3">
-          <el-form-item label="请求类型" prop="httpMethod">
-            <DictSelect
-              v-model="formData.httpMethod"
-              type="http_method"
-              value-field="value"
-              label-field="label"
-              placeholder="请选择请求类型"
-              clearable
-              style="width: 100%"
-            />
-          </el-form-item>
-          <el-form-item label="API地址" prop="apiUrl">
-            <el-input
-              v-model="apiDisplayValue"
-              placeholder="请选择API地址"
-              readonly
-              clearable
-              style="width: 100%"
-              @click="openApiDialog"
-              @clear="clearApiSelection"
-            />
-          </el-form-item>
-        </template>
         <el-form-item label="图标" prop="icon">
           <IconSelector v-model="formData.icon" />
         </el-form-item>
@@ -175,60 +142,6 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="apiDialogVisible" title="选择API" width="1080px" class="api-picker-dialog">
-      <div class="api-dialog">
-        <div class="api-services">
-          <div class="api-services-title">服务列表</div>
-          <el-scrollbar height="360px">
-            <el-menu
-              :default-active="selectedServiceName"
-              class="api-services-menu"
-              @select="handleServiceSelect"
-            >
-              <el-menu-item
-                v-for="service in serviceApiList"
-                :key="service.serviceName"
-                :index="service.serviceName"
-              >
-                {{ service.serviceLabel || service.serviceName }}
-              </el-menu-item>
-            </el-menu>
-          </el-scrollbar>
-        </div>
-        <div class="api-list">
-          <div class="api-list-title">
-            {{ selectedServiceLabel || 'API列表' }}
-          </div>
-          <div class="api-table-wrapper">
-            <el-table
-              :data="selectedServiceApis"
-              height="100%"
-              border
-              @row-dblclick="handleApiPick"
-            >
-            <el-table-column type="index" label="ID" width="60" />
-            <el-table-column prop="fullPath" label="请求地址" min-width="260" />
-            <el-table-column prop="method" label="请求方式" width="120">
-              <template #default="scope">
-                <el-tag :type="getMethodTagType(scope.row.method)">
-                  {{ scope.row.method }}
-                </el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column prop="description" label="描述" min-width="200" />
-            <el-table-column label="操作" width="100" align="center">
-              <template #default="scope">
-                <el-button type="primary" link @click="handleApiPick(scope.row)">选择</el-button>
-              </template>
-            </el-table-column>
-            </el-table>
-          </div>
-        </div>
-      </div>
-      <template #footer>
-        <el-button @click="apiDialogVisible = false">取消</el-button>
-      </template>
-    </el-dialog>
   </div>
 </template>
 
@@ -239,13 +152,12 @@ import { message } from '@/api/request.ts'
 import { Plus, Search } from '@element-plus/icons-vue'
 import * as ElementPlusIconsVue from '@element-plus/icons-vue'
 import { getPermissionTree, savePermission, updatePermission, deletePermission } from '@/api/permission.ts'
-import { getAllServiceApis, getServiceApis } from '@/api/scanner.ts'
 import IconSelector from '@/components/IconSelector.vue'
 import DictSelect from '@/components/DictSelect.vue'
 import { useDict } from '@/utils/dict'
 
 import { checkButtonPermission } from '@/utils/permission'
-import { PermissionInfo, ServiceInfo, ApiInfo } from '@/types'
+import { PermissionInfo } from '@/types'
 
 const loading = ref<boolean>(false)
 const submitLoading = ref<boolean>(false)
@@ -257,7 +169,7 @@ const flatTreeOptions = ref<any[]>([])
 const searchKeyword = ref<string>('')
 const tableRef = ref<any>(null)
 
-const { dicts: permissionDicts } = useDict(['permission_type', 'http_method'])
+const { dicts: permissionDicts } = useDict(['permission_type'])
 
 const dictLabelByValue = (type: string, value: any) => {
   const list = permissionDicts.value[type] || []
@@ -273,14 +185,6 @@ const getPermissionTypeTag = (permissionType: number) => {
   return 'info'
 }
 
-const getHttpMethodTag = (method: string) => {
-  if (method === 'GET') return 'success'
-  if (method === 'POST') return 'primary'
-  if (method === 'PUT') return 'warning'
-  if (method === 'DELETE') return 'danger'
-  return 'info'
-}
-
 // 权限检查
 const canAdd = computed(() => checkButtonPermission('permission', 'admin:permission:add'))
 const canEdit = computed(() => checkButtonPermission('permission', 'admin:permission:edit'))
@@ -293,40 +197,9 @@ const formData = ref({
   permissionType: 1,
   parentId: null,
   routePath: '',
-  apiUrl: '',
-  httpMethod: '',
   icon: '',
   sort: 0,
   description: ''
-})
-
-const apiDialogVisible = ref<boolean>(false)
-const serviceApiList = ref<ServiceInfo[]>([])
-const selectedServiceName = ref<string>('')
-const selectedServiceLabel = ref<string>('')
-
-const apiDisplayValue = computed({
-  get: () => {
-    if (!formData.value.apiUrl) {
-      return ''
-    }
-    if (formData.value.httpMethod) {
-      return `${formData.value.httpMethod} ${formData.value.apiUrl}`
-    }
-    return formData.value.apiUrl
-  },
-  set: (value) => {
-    if (!value) {
-      clearApiSelection()
-    }
-  }
-})
-
-const selectedServiceApis = computed<ApiInfo[]>(() => {
-  const service = serviceApiList.value.find(
-    (item) => item.serviceName === selectedServiceName.value
-  )
-  return service?.apis || []
 })
 
 // 动态验证规则
@@ -344,16 +217,6 @@ const rules = computed(() => {
   }
   
   // 路由路径允许为空（不再强制要求）
-  
-  // 操作类型需要API地址和请求类型
-  if (formData.value.permissionType === 3) {
-    baseRules.apiUrl = [
-      { required: true, message: '请选择API地址', trigger: 'change' }
-    ]
-    baseRules.httpMethod = [
-      { required: true, message: '请选择请求类型', trigger: 'change' }
-    ]
-  }
   
   return baseRules
 })
@@ -425,98 +288,11 @@ const flattenTree = (tree) => {
   return result
 }
 
-// 加载服务API列表
-const loadServiceApiList = async () => {
-  try {
-    const data = await getAllServiceApis()
-    const services: ServiceInfo[] = []
-
-    for (const service of data || []) {
-      const serviceItem: ServiceInfo = {
-        serviceName: service.serviceName,
-        serviceLabel: service.serviceLabel,
-        apis: service.apis || []
-      }
-
-      if (!serviceItem.apis || serviceItem.apis.length === 0) {
-        try {
-          serviceItem.apis = await getServiceApis(service.serviceName)
-        } catch (error) {
-          console.error(`加载服务 ${service.serviceName} 的API列表失败:`, error)
-          serviceItem.apis = []
-        }
-      }
-
-      services.push(serviceItem)
-    }
-
-    serviceApiList.value = services
-
-    if (!selectedServiceName.value && services.length > 0) {
-      selectedServiceName.value = services[0].serviceName
-      selectedServiceLabel.value = services[0].serviceLabel
-    }
-  } catch (error) {
-    console.error('加载服务API列表失败:', error)
-  }
-}
-
-const openApiDialog = async () => {
-  if (serviceApiList.value.length === 0) {
-    await loadServiceApiList()
-  }
-  if (!selectedServiceName.value && serviceApiList.value.length > 0) {
-    selectedServiceName.value = serviceApiList.value[0].serviceName
-    selectedServiceLabel.value = serviceApiList.value[0].serviceLabel
-  }
-  apiDialogVisible.value = true
-}
-
-const handleServiceSelect = (serviceName: string) => {
-  selectedServiceName.value = serviceName
-  const service = serviceApiList.value.find((item) => item.serviceName === serviceName)
-  selectedServiceLabel.value = service?.serviceLabel || serviceName
-}
-
-const handleApiPick = (api: ApiInfo) => {
-  formData.value.apiUrl = api.fullPath
-  formData.value.httpMethod = api.method
-  if (api.description) {
-    formData.value.description = api.description
-  }
-  apiDialogVisible.value = false
-}
-
-const clearApiSelection = () => {
-  formData.value.apiUrl = ''
-  formData.value.httpMethod = ''
-}
-
 // 权限类型变化处理
 const handlePermissionTypeChange = (value) => {
-  if (value === 1 || value === 2) {
-    // 菜单或页面：清空API相关字段
-    formData.value.apiUrl = ''
-    formData.value.httpMethod = ''
-  } else if (value === 3) {
+  if (value === 3) {
     // 操作：清空路由路径
     formData.value.routePath = ''
-  }
-}
-
-// 获取请求方法的标签类型
-const getMethodTagType = (method) => {
-  switch (method) {
-    case 'GET':
-      return 'success'
-    case 'POST':
-      return 'primary'
-    case 'PUT':
-      return 'warning'
-    case 'DELETE':
-      return 'danger'
-    default:
-      return 'info'
   }
 }
 
@@ -548,23 +324,9 @@ const handleEdit = async (row) => {
     permissionType: row.permissionType,
     parentId: row.parentId,
     routePath: row.routePath || '',
-    apiUrl: row.apiUrl || '',
-    httpMethod: row.httpMethod || '',
     icon: row.icon || '',
     sort: row.sort || 0,
     description: row.description || ''
-  }
-  if (row.apiUrl) {
-    if (serviceApiList.value.length === 0) {
-      await loadServiceApiList()
-    }
-    const matchService = serviceApiList.value.find((service) =>
-      service.apis?.some((api) => api.fullPath === row.apiUrl)
-    )
-    if (matchService) {
-      selectedServiceName.value = matchService.serviceName
-      selectedServiceLabel.value = matchService.serviceLabel
-    }
   }
   dialogVisible.value = true
 }
@@ -622,8 +384,6 @@ const resetForm = () => {
     permissionType: 1,
     parentId: null,
     routePath: '',
-    apiUrl: '',
-    httpMethod: '',
     icon: '',
     sort: 0,
     description: ''
@@ -646,7 +406,6 @@ const getIconComponent = (iconName) => {
 
 onMounted(() => {
   loadPermissionTree()
-  loadServiceApiList() // 加载服务API列表
 })
 </script>
 
@@ -729,103 +488,4 @@ onMounted(() => {
   transition: opacity 0.2s ease;
 }
 
-.api-suggestion {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.api-method {
-  padding: 2px 6px;
-  border-radius: 3px;
-  font-size: 12px;
-  font-weight: bold;
-  min-width: 50px;
-  text-align: center;
-  color: white;
-}
-
-.api-suggestion .api-method {
-  background-color: #67c23a;
-}
-
-.api-path {
-  flex: 1;
-  font-family: monospace;
-}
-
-.api-desc {
-  color: #909399;
-  font-size: 12px;
-}
-
-.api-dialog {
-  display: flex;
-  gap: 16px;
-  background: #f5f7fb;
-  padding: 12px;
-  border-radius: 8px;
-  height: 420px;
-  box-sizing: border-box;
-}
-
-.api-services {
-  width: 220px;
-  background: #fff;
-  border: 1px solid #ebeef5;
-  border-radius: 8px;
-  padding: 12px;
-  height: 100%;
-  box-sizing: border-box;
-}
-
-.api-services-title {
-  font-weight: 600;
-  margin-bottom: 10px;
-  color: #303133;
-}
-
-.api-services-menu {
-  border-right: none;
-}
-
-.api-list {
-  flex: 1;
-  background: #fff;
-  border: 1px solid #ebeef5;
-  border-radius: 8px;
-  padding: 12px;
-  height: 100%;
-  box-sizing: border-box;
-  display: flex;
-  flex-direction: column;
-}
-
-.api-list-title {
-  font-weight: 600;
-  margin-bottom: 10px;
-  color: #303133;
-}
-
-.api-table-wrapper {
-  flex: 1;
-  min-height: 0;
-}
-
-.api-picker-dialog :deep(.el-dialog__body) {
-  padding: 8px 16px 16px;
-}
-
-.api-picker-dialog :deep(.el-dialog__header) {
-  padding: 16px 16px 0;
-}
-
-.api-picker-dialog :deep(.el-table) {
-  border-radius: 6px;
-  overflow: hidden;
-}
-
-.api-picker-dialog :deep(.el-table__header) {
-  background: #f8fafc;
-}
 </style>

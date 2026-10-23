@@ -69,8 +69,6 @@ export interface PermissionInfo {
   icon?: string
   sort?: number
   description?: string
-  httpMethod?: string
-  apiUrl?: string
   children?: PermissionInfo[]
 }
 
@@ -88,27 +86,3 @@ export interface RouteInfo {
   }
   children?: RouteInfo[]
 }
-
-/**
- * 服务API信息
- */
-export interface ApiInfo {
-  method: string
-  path: string
-  fullPath: string
-  methodName?: string
-  className?: string
-  description?: string
-  apiId?: string
-  serviceId?: string
-}
-
-/**
- * 服务信息（包含API列表）
- */
-export interface ServiceInfo {
-  serviceName: string
-  serviceLabel: string
-  apis: ApiInfo[]
-}
-
