@@ -26,50 +26,122 @@
         </div>
       </template>
 
-      <el-table
-        :default-expand-all="!!searchKeyword"
-        ref="tableRef"
-        :data="tableData"
-        row-key="id"
-        :tree-props="{ children: 'children' }"
-        border
-        style="width: 100%"
-        v-loading="loading"
-        @row-click="handleRowClick"
-      >
-        <el-table-column prop="permissionName" label="权限名称" width="200" align="center" />
-        <el-table-column prop="permissionCode" label="权限编码" width="200" align="center" />
-         <el-table-column prop="permissionType" label="权限类型" width="120" align="center">
-           <template #default="scope">
-             <el-tag :type="getPermissionTypeTag(scope.row.permissionType)">
-               {{ dictLabelByValue('permission_type', scope.row.permissionType) }}
-             </el-tag>
-           </template>
-         </el-table-column>
+      <div class="master-detail" v-loading="loading">
+        <!-- 左：菜单 / 页面树（不含操作） -->
+        <aside class="left-panel">
+          <div class="panel-title">
+            <span>权限结构</span>
+            <span class="panel-sub">菜单 / 页面</span>
+          </div>
+          <el-tree
+            ref="treeRef"
+            :data="leftTreeData"
+            node-key="id"
+            :props="{ label: 'permissionName', children: 'children' }"
+            highlight-current
+            default-expand-all
+            :expand-on-click-node="false"
+            @node-click="handleNodeClick"
+          >
+            <template #default="{ data }">
+              <div class="tree-node">
+                <el-tag
+                  size="small"
+                  :type="getPermissionTypeTag(data.permissionType)"
+                  class="type-tag"
+                >
+                  {{ dictLabelByValue('permission_type', data.permissionType) }}
+                </el-tag>
+                <span class="node-label">{{ data.permissionName }}</span>
+              </div>
+            </template>
+          </el-tree>
+          <div v-if="!leftTreeData.length" class="empty-tip">暂无菜单/页面权限</div>
+        </aside>
 
-        <el-table-column prop="routePath" label="路由路径" width="200" align="center" />
+        <!-- 右：选中节点详情 + 子权限 -->
+        <section class="right-panel">
+          <template v-if="selectedNode">
+            <div class="detail-header">
+              <div class="detail-meta">
+                <h3 class="detail-name">{{ selectedNode.permissionName }}</h3>
+                <el-tag size="small" :type="getPermissionTypeTag(selectedNode.permissionType)">
+                  {{ dictLabelByValue('permission_type', selectedNode.permissionType) }}
+                </el-tag>
+                <code class="detail-code">{{ selectedNode.permissionCode }}</code>
+              </div>
+              <div class="detail-actions">
+                <el-button v-if="canAdd" link type="primary" @click="handleAddChild(selectedNode)">
+                  <el-icon><Plus /></el-icon>
+                  新增子权限
+                </el-button>
+                <el-button v-if="canEdit" link type="primary" @click="handleEdit(selectedNode)">
+                  编辑
+                </el-button>
+                <el-button v-if="canDelete" link type="danger" @click="handleDelete(selectedNode)">
+                  删除
+                </el-button>
+              </div>
+            </div>
 
-        <el-table-column prop="icon" label="图标" width="120" align="center">
-          <template #default="scope">
-            <el-icon v-if="scope.row.icon" :size="20">
-              <component :is="getIconComponent(scope.row.icon)" />
-            </el-icon>
-            <span v-else style="color: #909399">-</span>
+            <div class="detail-body">
+              <el-descriptions :column="2" border size="small" class="detail-desc">
+                <el-descriptions-item label="路由路径">
+                  {{ selectedNode.routePath || '-' }}
+                </el-descriptions-item>
+                <el-descriptions-item label="排序">
+                  {{ selectedNode.sort ?? 0 }}
+                </el-descriptions-item>
+                <el-descriptions-item label="描述" :span="2">
+                  {{ selectedNode.description || '-' }}
+                </el-descriptions-item>
+              </el-descriptions>
+
+              <div class="children-section">
+                <div class="section-title">
+                  <span>子权限</span>
+                  <span class="section-count">{{ selectedChildren.length }}</span>
+                </div>
+                <el-table
+                  :data="selectedChildren"
+                  row-key="id"
+                  border
+                  size="small"
+                  style="width: 100%"
+                  empty-text="暂无子权限"
+                >
+                  <el-table-column prop="permissionName" label="名称" min-width="140" />
+                  <el-table-column prop="permissionCode" label="编码" min-width="180" show-overflow-tooltip />
+                  <el-table-column prop="permissionType" label="类型" width="90" align="center">
+                    <template #default="scope">
+                      <el-tag size="small" :type="getPermissionTypeTag(scope.row.permissionType)">
+                        {{ dictLabelByValue('permission_type', scope.row.permissionType) }}
+                      </el-tag>
+                    </template>
+                  </el-table-column>
+                  <el-table-column prop="sort" label="排序" width="70" align="center" />
+                  <el-table-column prop="description" label="描述" min-width="160" show-overflow-tooltip />
+                  <el-table-column label="操作" width="200" align="center" fixed="right">
+                    <template #default="scope">
+                      <el-button v-if="canAdd" link type="primary" @click="handleAddChild(scope.row)">
+                        新增
+                      </el-button>
+                      <el-button v-if="canEdit" link type="primary" @click="handleEdit(scope.row)">
+                        编辑
+                      </el-button>
+                      <el-button v-if="canDelete" link type="danger" @click="handleDelete(scope.row)">
+                        删除
+                      </el-button>
+                    </template>
+                  </el-table-column>
+                </el-table>
+              </div>
+            </div>
           </template>
-        </el-table-column>
-        <el-table-column prop="sort" label="排序" width="80" align="center" />
-        <el-table-column prop="description" label="描述" align="center" />
-        <el-table-column label="操作" width="250" fixed="right" align="center">
-          <template #default="scope">
-            <el-button v-if="canAdd" link type="primary" @click="handleAddChild(scope.row)">
-              <el-icon><Plus /></el-icon>
-              新增
-            </el-button>
-            <el-button v-if="canEdit" link type="primary" @click="handleEdit(scope.row)">编辑</el-button>
-            <el-button v-if="canDelete" link type="danger" @click="handleDelete(scope.row)">删除</el-button>
-          </template>
-        </el-table-column>
-      </el-table>
+
+          <el-empty v-else description="请从左侧选择菜单或页面权限" />
+        </section>
+      </div>
     </el-card>
 
     <!-- 新增/编辑对话框 -->
@@ -91,22 +163,22 @@
         <el-form-item label="权限编码" prop="permissionCode">
           <el-input v-model="formData.permissionCode" placeholder="请输入权限编码" />
         </el-form-item>
-         <el-form-item label="权限类型" prop="permissionType">
-           <DictSelect
-             v-model="formData.permissionType"
-             type="permission_type"
-             value-field="value"
-             label-field="label"
-             placeholder="请选择权限类型"
-             style="width: 100%"
-             @change="handlePermissionTypeChange"
-           />
-         </el-form-item>
+        <el-form-item label="权限类型" prop="permissionType">
+          <DictSelect
+            v-model="formData.permissionType"
+            type="permission_type"
+            value-field="value"
+            label-field="label"
+            placeholder="请选择权限类型"
+            style="width: 100%"
+            @change="handlePermissionTypeChange"
+          />
+        </el-form-item>
 
         <el-form-item label="父权限" prop="parentId">
           <el-tree-select
             v-model="formData.parentId"
-            :data="tableData"
+            :data="leftTreeData"
             :props="{ label: 'permissionName', value: 'id', children: 'children' }"
             placeholder="请选择父权限（可选）"
             clearable
@@ -114,9 +186,9 @@
             style="width: 100%"
           />
         </el-form-item>
-        <el-form-item 
+        <el-form-item
           v-if="Number(formData.permissionType) === 1 || Number(formData.permissionType) === 2"
-          label="路由路径" 
+          label="路由路径"
           prop="routePath"
         >
           <el-input v-model="formData.routePath" placeholder="请输入路由路径（菜单/页面权限需要）" />
@@ -141,12 +213,11 @@
         <el-button type="primary" @click="handleSubmit" :loading="submitLoading">确定</el-button>
       </template>
     </el-dialog>
-
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, nextTick } from 'vue'
+import { ref, computed, onMounted, nextTick, watch } from 'vue'
 import { ElMessageBox, FormInstance } from 'element-plus'
 import { message } from '@/api/request.ts'
 import { Plus, Search } from '@element-plus/icons-vue'
@@ -159,15 +230,21 @@ import { useDict } from '@/utils/dict'
 import { checkButtonPermission } from '@/utils/permission'
 import { PermissionInfo } from '@/types'
 
+/** 权限类型：1 菜单 / 2 页面 / 3 操作 */
+const TYPE_MENU = 1
+const TYPE_PAGE = 2
+const TYPE_ACTION = 3
+
 const loading = ref<boolean>(false)
 const submitLoading = ref<boolean>(false)
 const dialogVisible = ref<boolean>(false)
 const dialogTitle = ref<string>('新增权限')
 const formRef = ref<FormInstance | null>(null)
 const tableData = ref<PermissionInfo[]>([])
-const flatTreeOptions = ref<any[]>([])
 const searchKeyword = ref<string>('')
-const tableRef = ref<any>(null)
+const selectedId = ref<number | string | null>(null)
+const nodeMap = ref<Map<string | number, PermissionInfo>>(new Map())
+const treeRef = ref<any>(null)
 
 const { dicts: permissionDicts } = useDict(['permission_type'])
 
@@ -179,72 +256,102 @@ const dictLabelByValue = (type: string, value: any) => {
 }
 
 const getPermissionTypeTag = (permissionType: number) => {
-  if (permissionType === 1) return 'success'
-  if (permissionType === 2) return 'warning'
-  if (permissionType === 3) return 'info'
+  const t = Number(permissionType)
+  if (t === TYPE_MENU) return 'success'
+  if (t === TYPE_PAGE) return 'warning'
+  if (t === TYPE_ACTION) return 'info'
   return 'info'
 }
 
-// 权限检查
 const canAdd = computed(() => checkButtonPermission('permission', 'admin:permission:add'))
 const canEdit = computed(() => checkButtonPermission('permission', 'admin:permission:edit'))
 const canDelete = computed(() => checkButtonPermission('permission', 'admin:permission:delete'))
 
+/** 左侧树：去掉操作（type=3）节点，只保留菜单/页面骨架 */
+const leftTreeData = computed(() => {
+  const filterNodes = (nodes: PermissionInfo[]): PermissionInfo[] => {
+    const result: PermissionInfo[] = []
+    for (const node of nodes) {
+      const t = Number((node as any).permissionType)
+      if (t === TYPE_ACTION) continue
+      const children = node.children ? filterNodes(node.children) : []
+      result.push({ ...node, children })
+    }
+    return result
+  }
+  return filterNodes(tableData.value)
+})
+
+const selectedNode = computed(() => {
+  if (selectedId.value == null) return null
+  return nodeMap.value.get(selectedId.value) || null
+})
+
+/** 选中节点的直接子权限（含操作），从全量树 map 取 */
+const selectedChildren = computed(() => {
+  const node = selectedNode.value
+  if (!node) return []
+  return (node.children as PermissionInfo[]) || []
+})
+
 const formData = ref({
-  id: null,
+  id: null as any,
   permissionName: '',
   permissionCode: '',
-  permissionType: 1,
-  parentId: null,
+  permissionType: 1 as number,
+  parentId: null as any,
   routePath: '',
   icon: '',
   sort: 0,
   description: ''
 })
 
-// 动态验证规则
-const rules = computed(() => {
-  const baseRules = {
-    permissionName: [
-      { required: true, message: '请输入权限名称', trigger: 'blur' }
-    ],
-    permissionCode: [
-      { required: true, message: '请输入权限编码', trigger: 'blur' }
-    ],
-    permissionType: [
-      { required: true, message: '请选择权限类型', trigger: 'change' }
-    ]
+const rules = computed(() => ({
+  permissionName: [{ required: true, message: '请输入权限名称', trigger: 'blur' }],
+  permissionCode: [{ required: true, message: '请输入权限编码', trigger: 'blur' }],
+  permissionType: [{ required: true, message: '请选择权限类型', trigger: 'change' }]
+}))
+
+const buildNodeMap = (nodes: PermissionInfo[], map = new Map<string | number, PermissionInfo>()) => {
+  for (const node of nodes || []) {
+    map.set(node.id, node)
+    if (node.children?.length) {
+      buildNodeMap(node.children, map)
+    }
   }
-  
-  // 路由路径允许为空（不再强制要求）
-  
-  return baseRules
-})
+  return map
+}
 
+/** 找到第一个适合作为默认选中的菜单/页面 */
+const findDefaultSelected = (nodes: PermissionInfo[]): PermissionInfo | null => {
+  for (const node of nodes || []) {
+    const t = Number((node as any).permissionType)
+    if (t === TYPE_MENU || t === TYPE_PAGE) {
+      return node
+    }
+    if (node.children?.length) {
+      const found = findDefaultSelected(node.children)
+      if (found) return found
+    }
+  }
+  return null
+}
 
-// 加载权限树
 const loadPermissionTree = async () => {
   loading.value = true
   try {
     const data = await getPermissionTree(searchKeyword.value || undefined)
     tableData.value = data || []
-    // 用于下拉选择器的数据（扁平化处理）
-    flatTreeOptions.value = flattenTree(data || [])
-    // 如果有搜索关键词，默认展开所有节点
-    if (searchKeyword.value && tableRef.value) {
+    nodeMap.value = buildNodeMap(tableData.value)
+
+    // 保持选中；失效则选第一个菜单/页面
+    if (selectedId.value == null || !nodeMap.value.has(selectedId.value)) {
+      const first = findDefaultSelected(tableData.value)
+      selectedId.value = first ? first.id : null
       nextTick(() => {
-        // 展开所有节点
-        const toggleRowExpansion = (rows) => {
-          if (Array.isArray(rows)) {
-            rows.forEach(row => {
-              tableRef.value?.toggleRowExpansion(row, true)
-              if (row.children && row.children.length > 0) {
-                toggleRowExpansion(row.children)
-              }
-            })
-          }
+        if (first) {
+          // el-tree 需要节点对象在 leftTree 中存在
         }
-        toggleRowExpansion(tableData.value)
       })
     }
   } catch (error) {
@@ -254,74 +361,46 @@ const loadPermissionTree = async () => {
   }
 }
 
-// 搜索
 const handleSearch = () => {
   loadPermissionTree()
 }
 
-// 点击行展开/收缩
-const handleRowClick = (row, column, event) => {
-  // 如果点击的是操作列或操作按钮，不触发展开/收缩
-  if (event.target.closest('.el-button') || event.target.closest('.el-table__cell:last-child')) {
-    return
-  }
-  
-  // 只有有子节点的行才能展开/收缩
-  if (tableRef.value && row.children && row.children.length > 0) {
-    // 切换该行的展开/收缩状态
-    tableRef.value.toggleRowExpansion(row)
-  }
-}
-
-// 扁平化树形数据
-const flattenTree = (tree) => {
-  const result = []
-  const flatten = (nodes) => {
-    nodes.forEach(node => {
-      result.push({ ...node, children: undefined })
-      if (node.children && node.children.length > 0) {
-        flatten(node.children)
-      }
-    })
-  }
-  flatten(tree)
-  return result
+const handleNodeClick = (row: PermissionInfo) => {
+  selectedId.value = row.id
 }
 
 // 权限类型变化处理
 const handlePermissionTypeChange = (value) => {
-  if (value === 3) {
-    // 操作：清空路由路径
+  if (Number(value) === TYPE_ACTION) {
     formData.value.routePath = ''
   }
 }
 
-// 新增
 const handleAdd = () => {
   dialogTitle.value = '新增权限'
   resetForm()
+  // 若当前有选中节点，默认挂在该节点下
+  if (selectedNode.value) {
+    formData.value.parentId = selectedNode.value.id
+  }
   dialogVisible.value = true
 }
 
-// 新增子权限（从操作栏点击）
-const handleAddChild = (row) => {
+const handleAddChild = (row: PermissionInfo) => {
   dialogTitle.value = '新增权限'
   resetForm()
-  // 自动设置当前行为父权限
   formData.value.parentId = row.id
   dialogVisible.value = true
 }
 
-// 编辑
-const handleEdit = async (row) => {
+const handleEdit = async (row: PermissionInfo) => {
   dialogTitle.value = '编辑权限'
   resetForm()
-  // 复制数据，排除children
   formData.value = {
     id: row.id,
     permissionName: row.permissionName,
     permissionCode: row.permissionCode,
-    permissionType: row.permissionType,
+    permissionType: Number((row as any).permissionType),
     parentId: row.parentId,
     routePath: row.routePath || '',
     icon: row.icon || '',
@@ -331,29 +410,30 @@ const handleEdit = async (row) => {
   dialogVisible.value = true
 }
 
-// 删除
-const handleDelete = async (row) => {
+const handleDelete = async (row: PermissionInfo) => {
   try {
     await ElMessageBox.confirm('确定要删除该权限吗？', '提示', {
       confirmButtonText: '确定',
       cancelButtonText: '取消',
       type: 'warning'
     })
-    
+
     await deletePermission(row.id)
     message.success('删除成功')
+    if (selectedId.value === row.id) {
+      selectedId.value = null
+    }
     loadPermissionTree()
   } catch (error) {
     if (error !== 'cancel') {
-      // 错误消息已在 request.ts 中统一处理
+      // handled globally
     }
   }
 }
 
-// 提交
 const handleSubmit = async () => {
   if (!formRef.value) return
-  
+
   await formRef.value.validate(async (valid) => {
     if (valid) {
       submitLoading.value = true
@@ -375,7 +455,6 @@ const handleSubmit = async () => {
   })
 }
 
-// 重置表单
 const resetForm = () => {
   formData.value = {
     id: null,
@@ -393,19 +472,22 @@ const resetForm = () => {
   }
 }
 
-// 对话框关闭
 const handleDialogClose = () => {
   resetForm()
 }
 
-// 获取图标组件
-const getIconComponent = (iconName) => {
-  if (!iconName) return null
-  return ElementPlusIconsVue[iconName] || null
-}
+// 同步 el-tree 当前高亮
+watch(selectedId, (val) => {
+  if (val != null && treeRef.value) {
+    treeRef.value.setCurrentKey(val)
+  }
+}, { immediate: false })
 
-onMounted(() => {
-  loadPermissionTree()
+onMounted(async () => {
+  await loadPermissionTree()
+  if (selectedId.value != null && treeRef.value) {
+    treeRef.value.setCurrentKey(selectedId.value)
+  }
 })
 </script>
 
@@ -420,72 +502,146 @@ onMounted(() => {
   align-items: center;
 }
 
-/* 表格展开/收缩动画 */
-:deep(.el-table__body-wrapper) {
-  transition: height 0.3s ease;
+.master-detail {
+  display: flex;
+  gap: 16px;
+  min-height: 520px;
+  align-items: stretch;
 }
 
-/* 表格行展开/收缩动画 */
-:deep(.el-table__row) {
-  transition: background-color 0.2s ease;
+.left-panel {
+  width: 280px;
+  flex-shrink: 0;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 8px;
+  padding: 12px;
+  background: var(--el-fill-color-blank);
+  display: flex;
+  flex-direction: column;
 }
 
-/* 展开图标旋转动画 */
-:deep(.el-table__expand-icon) {
-  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  display: inline-block;
+.panel-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  font-weight: 600;
+  margin-bottom: 10px;
+  padding: 0 4px;
 }
 
-:deep(.el-table__expand-icon--expanded) {
-  transform: rotate(90deg);
+.panel-sub {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--el-text-color-secondary);
 }
 
-/* 子行显示/隐藏动画 - 使用CSS过渡 */
-:deep(.el-table__body tr[class*="el-table__row--level"]) {
-  animation: slideDown 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+.tree-node {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding-right: 8px;
 }
 
-/* 展开时的动画 */
-@keyframes slideDown {
-  from {
-    opacity: 0;
-    max-height: 0;
-    transform: translateY(-5px);
-  }
-  to {
-    opacity: 1;
-    max-height: 1000px;
-    transform: translateY(0);
-  }
+.type-tag {
+  flex-shrink: 0;
 }
 
-/* 收缩时的动画 */
-@keyframes slideUp {
-  from {
-    opacity: 1;
-    max-height: 1000px;
-    transform: translateY(0);
-  }
-  to {
-    opacity: 0;
-    max-height: 0;
-    transform: translateY(-5px);
-  }
+.node-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-/* 行点击时的视觉反馈 */
-:deep(.el-table__row) {
-  cursor: pointer;
-  transition: background-color 0.2s ease;
+.empty-tip {
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
+  text-align: center;
+  padding: 24px 0;
 }
 
-:deep(.el-table__row:hover) {
-  background-color: #f5f7fa;
+.right-panel {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 8px;
+  padding: 16px;
+  background: var(--el-fill-color-blank);
 }
 
-/* 表格单元格内容过渡 */
-:deep(.el-table__cell) {
-  transition: opacity 0.2s ease;
+.detail-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--el-border-color-lighter);
 }
 
+.detail-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.detail-name {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.detail-code {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  background: var(--el-fill-color-light);
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.detail-actions {
+  flex-shrink: 0;
+  display: flex;
+  gap: 4px;
+}
+
+.detail-desc {
+  margin-bottom: 16px;
+}
+
+.children-section {
+  margin-top: 4px;
+}
+
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+
+.section-count {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--el-text-color-secondary);
+  background: var(--el-fill-color-light);
+  padding: 0 8px;
+  border-radius: 10px;
+}
+
+:deep(.el-tree) {
+  --el-tree-node-hover-bg-color: var(--el-fill-color-light);
+}
+
+:deep(.el-tree-node__content) {
+  height: 36px;
+  border-radius: 6px;
+}
+
+:deep(.el-tree--highlight-current .el-tree-node.is-current > .el-tree-node__content) {
+  background: var(--el-color-primary-light-9);
+}
 </style>
