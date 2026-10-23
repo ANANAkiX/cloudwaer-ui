@@ -427,6 +427,9 @@
           <el-descriptions-item label="业务Key">
             {{ currentTask.businessKey || '-' }}
           </el-descriptions-item>
+          <el-descriptions-item label="申请人">
+            {{ currentTask.starter || '-' }}
+          </el-descriptions-item>
           <el-descriptions-item label="处理人">
             {{ currentTask.assignee || '-' }}
           </el-descriptions-item>

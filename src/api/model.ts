@@ -100,6 +100,15 @@ export function publishModel(data: ModelPublishDTO): Promise<boolean> {
   })
 }
 
+// 关闭已发布（下线，之后可删除）
+export function offlineModel(id: number): Promise<boolean> {
+  return request({
+    url: '/flowable/model/offline',
+    method: 'post',
+    data: { id }
+  })
+}
+
 // 回退模型版本（生成新草稿版本）
 export function rollbackModel(data: { modelKey: string; version: number }): Promise<boolean> {
   return request({

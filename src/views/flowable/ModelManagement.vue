@@ -60,7 +60,7 @@
               <el-card class="stat-card archived">
                 <div class="stat-content">
                   <div class="stat-number">{{ stats.archived }}</div>
-                  <div class="stat-label">已更新</div>
+                  <div class="stat-label">已归档</div>
                 </div>
                 <el-icon class="stat-icon"><FolderOpened /></el-icon>
               </el-card>
@@ -131,12 +131,11 @@
             <el-badge :value="scope.row.version" type="primary" />
           </template>
         </el-table-column>
-        <el-table-column prop="modelStatus" label="状态" width="120" align="center">
+        <el-table-column prop="modelStatus" label="状态" width="130" align="center">
           <template #default="scope">
-            <el-tag v-if="scope.row.modelStatus === 0" type="info">草稿</el-tag>
-            <el-tag v-else-if="scope.row.modelStatus === 1" type="success">已发布</el-tag>
-            <el-tag v-else-if="scope.row.modelStatus === 2" type="warning">已更新</el-tag>
-            <span v-else>-</span>
+            <el-tag :type="getStatusType(scope.row.modelStatus)" size="small">
+              {{ getStatusText(scope.row.modelStatus) }}
+            </el-tag>
           </template>
         </el-table-column>
         <el-table-column prop="updateTime" label="更新时间" min-width="180">
@@ -173,7 +172,17 @@
                       <el-icon><Clock /></el-icon>
                       版本历史
                     </el-dropdown-item>
-                    <el-dropdown-item command="delete" divided>
+                    <el-dropdown-item
+                      v-if="scope.row.modelStatus === 1"
+                      command="offline"
+                    >
+                      关闭发布
+                    </el-dropdown-item>
+                    <el-dropdown-item
+                      v-if="scope.row.modelStatus !== 1"
+                      command="delete"
+                      divided
+                    >
                       <el-icon><Delete /></el-icon>
                       删除
                     </el-dropdown-item>
@@ -408,10 +417,25 @@
             <span>{{ formatTime(scope.row.updateTime) }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="140" align="center">
+        <el-table-column label="操作" width="200" align="center">
           <template #default="scope">
-            <el-button size="small" type="primary" @click="handleRollbackVersion(scope.row)">
+            <el-button
+              size="small"
+              type="primary"
+              link
+              :disabled="scope.row.modelStatus === 1"
+              @click="handleRollbackVersion(scope.row)"
+            >
               回退到此版本
+            </el-button>
+            <el-button
+              v-if="scope.row.modelStatus === 2"
+              size="small"
+              type="danger"
+              link
+              @click="handleDeleteHistoryVersion(scope.row)"
+            >
+              删除历史
             </el-button>
           </template>
         </el-table-column>
@@ -452,13 +476,18 @@ import {
   deleteModel,
   publishModel,
   getModelDetail,
-  rollbackModel
+  rollbackModel,
+  offlineModel
 } from '@/api/model'
 import { startFlowableProcess } from '@/api/flowable'
 import ProcessDesigner from '@/views/flowable/ProcessDesigner.vue'
 import FcDesigner from '@/components/FcDesigner'
+import { useDict } from '@/utils/dict'
+import type { DictItem } from '@/api/dict'
 
 import DictSelect from '@/components/DictSelect.vue'
+// 模型版本状态字典
+const { dicts: modelStatusDicts } = useDict(['wf_model_status'])
 // 响应式数据
 const loading = ref(false)
 const saveLoading = ref(false)
@@ -601,7 +630,7 @@ const loadData = async () => {
 const updateStats = (data: FlowableModelListItem[]) => {
   stats.total = data.length
   stats.published = data.filter(item => item.modelStatus === 1).length
-  stats.draft = data.filter(item => item.modelStatus === 0).length
+  stats.draft = data.filter(item => item.modelStatus === 0 || item.modelStatus === 3 || item.modelStatus === 4).length
   stats.archived = data.filter(item => item.modelStatus === 2).length
 }
 
@@ -887,9 +916,30 @@ const handleMoreAction = async (command: string, row: FlowableModelListItem) => 
     case 'history':
       await handleHistory(row)
       break
+    case 'offline':
+      await handleOffline(row)
+      break
     case 'delete':
       await handleDelete(row)
       break
+  }
+}
+
+const handleOffline = async (row: FlowableModelListItem) => {
+  try {
+    await ElMessageBox.confirm('确定关闭该模型的发布吗？关闭后不可再启动新实例，且可删除该模型。', '提示', {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
+    await offlineModel(row.id!)
+    ElMessage.success('已关闭发布')
+    loadData()
+  } catch (error) {
+    if (error !== 'cancel') {
+      console.error('关闭发布失败:', error)
+      ElMessage.error('关闭失败')
+    }
   }
 }
 
@@ -948,8 +998,45 @@ const handleRollbackVersion = async (row: FlowableModelListItem) => {
 }
 
 const handleBatchImport = () => {
-  // TODO: 实现批量导入功能
-  ElMessage.info('批量导入功能开发中...')
+  const input = document.createElement('input')
+  input.type = 'file'
+  input.accept = '.bpmn,.xml,.bpmn20.xml'
+  input.multiple = true
+  input.onchange = async () => {
+    const files = Array.from(input.files || [])
+    if (!files.length) return
+    let success = 0
+    for (const file of files) {
+      try {
+        const text = await file.text()
+        const parser = new DOMParser()
+        const doc = parser.parseFromString(text, 'application/xml')
+        const processEl = doc.querySelector('process') || doc.querySelector('bpmn\\:process')
+        const modelKey = processEl?.getAttribute('id') || file.name.replace(/\.(bpmn20\.xml|bpmn|xml)$/i, '')
+        const modelName = processEl?.getAttribute('name') || modelKey
+        const endTime = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+        await saveModel({
+          modelKey,
+          modelName,
+          category: 'import',
+          remark: `导入自 ${file.name}`,
+          bpmnXml: text,
+          endTime,
+          nodeActions: []
+        } as any)
+        success++
+      } catch (e) {
+        console.error('导入失败', file.name, e)
+      }
+    }
+    if (success > 0) {
+      ElMessage.success(`成功导入 ${success} 个模型`)
+      loadData()
+    } else {
+      ElMessage.error('导入失败')
+    }
+  }
+  input.click()
 }
 
 const handleSelectionChange = (selection: FlowableModelListItem[]) => {
@@ -1017,19 +1104,51 @@ const handleCurrentChange = (current: number) => {
 
 const getStatusType = (status: number) => {
   switch (status) {
-    case 0: return 'info'
     case 1: return 'success'
-    case 2: return 'warning'
+    case 3:
+    case 4: return 'warning'
+    case 0:
+    case 2: return 'info'
+    case 5: return 'danger'
     default: return ''
   }
 }
 
 const getStatusText = (status: number) => {
+  const key = String(status)
+  const item = (modelStatusDicts.value['wf_model_status'] || []).find(
+    (d: DictItem) => String(d.value) === key || String(d.code) === key
+  )
+  if (item?.label) return item.label
   switch (status) {
     case 0: return '草稿'
     case 1: return '已发布'
-    case 2: return '已更新'
+    case 2: return '已归档'
+    case 3: return '已更新未发布'
+    case 4: return '已回滚未发布'
+    case 5: return '已关闭'
     default: return '-'
+  }
+}
+
+const handleDeleteHistoryVersion = async (row: FlowableModelListItem) => {
+  try {
+    await ElMessageBox.confirm(`确定删除历史版本 v${row.version} 吗？`, '提示', {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
+    await deleteModel(row.id!)
+    ElMessage.success('历史版本已删除')
+    if (historyModel.value) {
+      await handleHistory(historyModel.value)
+    }
+    loadData()
+  } catch (error) {
+    if (error !== 'cancel') {
+      console.error('删除历史版本失败:', error)
+      ElMessage.error('删除失败')
+    }
   }
 }
 

@@ -436,18 +436,38 @@
           <!-- 操作历史 -->
           <el-tab-pane label="操作历史" name="history">
             <div class="operation-history">
-              <el-timeline>
+              <el-empty
+                v-if="!operationHistory.length"
+                description="暂无操作历史"
+                :image-size="72"
+              />
+              <el-timeline v-else>
                 <el-timeline-item
                   v-for="history in operationHistory"
                   :key="history.id"
                   :timestamp="formatTime(history.time)"
                   :type="getHistoryType(history.type)"
+                  :hollow="history.type === 'wait'"
                 >
-                  <el-card>
+                  <el-card shadow="never">
                     <div class="history-content">
-                      <p><strong>{{ history.userName }}</strong> {{ history.action }}</p>
-                      <p v-if="history.comment">备注: {{ history.comment }}</p>
-                      <p v-if="history.duration">耗时: {{ history.duration }}</p>
+                      <div class="history-title-row">
+                        <span class="history-user">{{ history.userName }}</span>
+                        <span class="history-action">{{ history.action }}</span>
+                        <el-tag
+                          v-if="history.result"
+                          size="small"
+                          :type="getResultTagType(history.result)"
+                        >
+                          {{ formatHistoryResult(history.result) }}
+                        </el-tag>
+                      </div>
+                      <p v-if="history.comment" class="history-line">
+                        备注：{{ history.comment }}
+                      </p>
+                      <p v-if="history.duration" class="history-meta">
+                        耗时：{{ history.duration }}
+                      </p>
                     </div>
                   </el-card>
                 </el-timeline-item>
@@ -467,7 +487,7 @@ import {
   Search, Refresh, List, Clock, VideoPlay, VideoPause, CircleCheck,
   CircleClose, Document, View, ArrowDown, Picture, Delete
 } from '@element-plus/icons-vue'
-import type { FlowableProcessInstance } from '@/api/flowable'
+import type { FlowableProcessHistoryItem, FlowableProcessInstance } from '@/api/flowable'
 import FcDesigner from '@/components/FcDesigner'
 import 'bpmn-js/dist/assets/diagram-js.css'
 import 'bpmn-js/dist/assets/bpmn-font/css/bpmn-embedded.css'
@@ -559,7 +579,7 @@ const formCreate = (FcDesigner as any).formCreate
 const displayProcessVariables = computed(() => (processVariables.value || []).filter((item) => item?.name !== 'formJson' && item?.name !== 'form_json'))
 
 // 操作历史
-const operationHistory = ref<any[]>([])
+const operationHistory = ref<FlowableProcessHistoryItem[]>([])
 
 // BPMN容器引用 - 移除，不再需要
 // const bpmnContainer = ref<HTMLElement | null>(null)
@@ -1240,17 +1260,39 @@ const formatXml = (xml: string) => {
   }
 }
 
-const getHistoryType = (type: string) => {
+const getHistoryType = (type?: string) => {
   switch (type) {
-    case 'start': return 'primary'
-    case 'restart': return 'primary'
-    case 'wait': return 'info'
-    case 'complete': return 'success'
-    case 'approve': return 'success'
-    case 'reject': return 'danger'
-    case 'end': return 'info'
-    default: return 'info'
+    case 'start':
+    case 'restart':
+      return 'primary'
+    case 'wait':
+      return 'info'
+    case 'complete':
+    case 'approve':
+      return 'success'
+    case 'reject':
+      return 'danger'
+    case 'end':
+      return 'info'
+    default:
+      return 'info'
   }
+}
+
+const formatHistoryResult = (result?: string | null) => {
+  if (!result) return ''
+  const normalized = result.trim().toLowerCase()
+  if (normalized === 'approve' || normalized === 'approved') return '同意'
+  if (normalized === 'reject' || normalized === 'rejected') return '拒绝'
+  return result
+}
+
+const getResultTagType = (result?: string | null): 'success' | 'danger' | 'info' => {
+  if (!result) return 'info'
+  const normalized = result.trim().toLowerCase()
+  if (normalized === 'approve' || normalized === 'approved') return 'success'
+  if (normalized === 'reject' || normalized === 'rejected') return 'danger'
+  return 'info'
 }
 
 
@@ -1516,18 +1558,47 @@ onMounted(() => {
     }
 
     .operation-history {
-      max-height: 400px;
+      max-height: 420px;
       overflow-y: auto;
+      padding: 4px 2px;
 
       .history-content {
-        p {
-          margin: 5px 0;
-          font-size: 14px;
-
-          strong {
-            color: #303133;
-          }
+        .history-title-row {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          flex-wrap: wrap;
         }
+
+        .history-user {
+          font-weight: 600;
+          color: #303133;
+        }
+
+        .history-action {
+          color: #606266;
+        }
+
+        .history-line {
+          margin: 8px 0 0;
+          font-size: 13px;
+          color: #606266;
+          line-height: 1.5;
+        }
+
+        .history-meta {
+          margin: 6px 0 0;
+          font-size: 12px;
+          color: #909399;
+        }
+      }
+
+      .el-card {
+        border-radius: 8px;
+      }
+
+      .el-card__body {
+        padding: 12px 14px;
       }
     }
   }

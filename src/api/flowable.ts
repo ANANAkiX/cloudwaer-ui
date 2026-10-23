@@ -94,6 +94,8 @@ export interface FlowableTaskItem {
   processDefinitionName?: string
   businessKey?: string
   assignee?: string
+  /** 流程申请人 */
+  starter?: string
   createTime?: string
   endTime?: string
   status?: string
@@ -276,7 +278,21 @@ export function getProcessVariables(id: string): Promise<Array<{ name: string; t
   })
 }
 
-export function getProcessHistory(id: string): Promise<Array<{ id: string; userName: string; action: string; time: string; endTime?: string; duration: string; comment: string; type?: string }>> {
+export type ProcessHistoryType = 'start' | 'restart' | 'wait' | 'complete' | 'approve' | 'reject' | 'end'
+
+export interface FlowableProcessHistoryItem {
+  id: string
+  userName: string
+  action: string
+  type: ProcessHistoryType | string
+  time?: string
+  endTime?: string
+  result?: string | null
+  comment?: string | null
+  duration?: string | null
+}
+
+export function getProcessHistory(id: string): Promise<FlowableProcessHistoryItem[]> {
   return request({
     url: '/flowable/process/history',
     method: 'get',
@@ -347,7 +363,7 @@ export function deleteFlowableTask(id: string): Promise<boolean> {
 // 节点动作相关API
 export function saveNodeAction(data: FlowableNodeAction): Promise<boolean> {
   return request({
-    url: '/node-action/save',
+    url: '/flowable/node-action/save',
     method: 'post',
     data
   })
@@ -355,7 +371,7 @@ export function saveNodeAction(data: FlowableNodeAction): Promise<boolean> {
 
 export function batchSaveNodeActions(data: FlowableNodeAction[]): Promise<boolean> {
   return request({
-    url: '/node-action/batch-save',
+    url: '/flowable/node-action/batch-save',
     method: 'post',
     data
   })
@@ -363,7 +379,7 @@ export function batchSaveNodeActions(data: FlowableNodeAction[]): Promise<boolea
 
 export function deleteNodeAction(id: string | number): Promise<boolean> {
   return request({
-    url: '/node-action/delete/' + id,
+    url: '/flowable/node-action/delete/' + id,
     method: 'delete'
   })
 }
@@ -375,7 +391,7 @@ export function getNodeActions(params: {
   eventType: string
 }): Promise<FlowableNodeAction[]> {
   return request({
-    url: '/node-action/list',
+    url: '/flowable/node-action/list',
     method: 'get',
     params
   })
@@ -383,14 +399,14 @@ export function getNodeActions(params: {
 
 export function getNodeActionsByModelId(modelId: string | number): Promise<FlowableNodeAction[]> {
   return request({
-    url: '/node-action/model/' + modelId,
+    url: '/flowable/node-action/model/' + modelId,
     method: 'get'
   })
 }
 
 export function updateNodeActionStatus(id: string | number, enabled: number): Promise<boolean> {
   return request({
-    url: '/node-action/status/' + id,
+    url: '/flowable/node-action/status/' + id,
     method: 'put',
     params: { enabled }
   })
@@ -401,7 +417,7 @@ export function getNodeActionConfig(params: {
   nodeId: string
 }): Promise<string> {
   return request({
-    url: '/node-action/config',
+    url: '/flowable/node-action/config',
     method: 'get',
     params
   })
@@ -430,7 +446,7 @@ export interface BpmnUpdateRequest {
 
 export function deployBpmn(data: BpmnDeployRequest): Promise<any> {
   return request({
-    url: '/bpmn-deploy/deploy',
+    url: '/flowable/bpmn-deploy/deploy',
     method: 'post',
     data
   })
@@ -438,7 +454,7 @@ export function deployBpmn(data: BpmnDeployRequest): Promise<any> {
 
 export function deployBpmnWithActions(data: BpmnDeployWithActionsRequest): Promise<any> {
   return request({
-    url: '/bpmn-deploy/deploy-with-actions',
+    url: '/flowable/bpmn-deploy/deploy-with-actions',
     method: 'post',
     data
   })
@@ -446,7 +462,7 @@ export function deployBpmnWithActions(data: BpmnDeployWithActionsRequest): Promi
 
 export function updateBpmn(data: BpmnUpdateRequest): Promise<any> {
   return request({
-    url: '/bpmn-deploy/update',
+    url: '/flowable/bpmn-deploy/update',
     method: 'post',
     data
   })
@@ -454,21 +470,21 @@ export function updateBpmn(data: BpmnUpdateRequest): Promise<any> {
 
 export function deleteDeployment(deploymentId: string): Promise<boolean> {
   return request({
-    url: '/bpmn-deploy/delete/' + deploymentId,
+    url: '/flowable/bpmn-deploy/delete/' + deploymentId,
     method: 'delete'
   })
 }
 
 export function getDeploymentDetail(deploymentId: string): Promise<any> {
   return request({
-    url: '/bpmn-deploy/detail/' + deploymentId,
+    url: '/flowable/bpmn-deploy/detail/' + deploymentId,
     method: 'get'
   })
 }
 
 export function extractBpmnNodes(bpmnXml: string): Promise<string[]> {
   return request({
-    url: '/bpmn-deploy/extract-nodes',
+    url: '/flowable/bpmn-deploy/extract-nodes',
     method: 'post',
     data: { bpmnXml }
   })
@@ -476,7 +492,7 @@ export function extractBpmnNodes(bpmnXml: string): Promise<string[]> {
 
 export function extractUserTasks(bpmnXml: string): Promise<string[]> {
   return request({
-    url: '/bpmn-deploy/extract-user-tasks',
+    url: '/flowable/bpmn-deploy/extract-user-tasks',
     method: 'post',
     data: { bpmnXml }
   })
@@ -484,7 +500,7 @@ export function extractUserTasks(bpmnXml: string): Promise<string[]> {
 
 export function validateBpmnXml(bpmnXml: string): Promise<boolean> {
   return request({
-    url: '/bpmn-deploy/validate',
+    url: '/flowable/bpmn-deploy/validate',
     method: 'post',
     data: { bpmnXml }
   })
@@ -492,7 +508,7 @@ export function validateBpmnXml(bpmnXml: string): Promise<boolean> {
 
 export function generateProcessDiagram(processDefinitionId: string): Promise<string> {
   return request({
-    url: '/bpmn-deploy/diagram/' + processDefinitionId,
+    url: '/flowable/bpmn-deploy/diagram/' + processDefinitionId,
     method: 'get'
   })
 }

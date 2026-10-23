@@ -723,7 +723,7 @@ onMounted(() => {
   }
 
   .pagination {
-    text-align: center;
+    text-align: right;
   }
 
   .application-form {

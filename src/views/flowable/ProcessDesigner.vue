@@ -85,51 +85,141 @@
               <el-input v-model="elementProperties.name" @input="() => handlePropertyChange('name')" />
             </el-form-item>
             <el-form-item label="处理人" v-if="isUserTask">
-              <el-input v-model="elementProperties.assignee" placeholder="请输入处理人" @input="() => handlePropertyChange('assignee')" />
+              <el-select
+                v-model="elementProperties.assignee"
+                filterable
+                remote
+                clearable
+                reserve-keyword
+                placeholder="选择用户作为处理人"
+                :remote-method="searchAssigneeUsers"
+                :loading="userSelectLoading"
+                style="width: 100%"
+                @change="() => handlePropertyChange('assignee')"
+              >
+                <el-option
+                  v-for="u in assigneeUserOptions"
+                  :key="u.username"
+                  :label="`${u.nickname || u.username}（${u.username}）`"
+                  :value="u.username"
+                />
+              </el-select>
             </el-form-item>
             <el-form-item label="候选用户" v-if="isUserTask">
-              <el-input v-model="elementProperties.candidateUsers" placeholder="请输入候选用户" @input="() => handlePropertyChange('candidateUsers')" />
+              <el-select
+                v-model="elementProperties.candidateUserList"
+                multiple
+                filterable
+                remote
+                clearable
+                placeholder="选择候选用户"
+                :remote-method="searchCandidateUsers"
+                :loading="userSelectLoading"
+                style="width: 100%"
+                @change="handleCandidateUsersChange"
+              >
+                <el-option
+                  v-for="u in candidateUserOptions"
+                  :key="u.username"
+                  :label="`${u.nickname || u.username}（${u.username}）`"
+                  :value="u.username"
+                />
+              </el-select>
             </el-form-item>
             <el-form-item label="候选组" v-if="isUserTask">
-              <el-input v-model="elementProperties.candidateGroups" placeholder="请输入候选组" @input="() => handlePropertyChange('candidateGroups')" />
+              <el-select
+                v-model="elementProperties.candidateRoleList"
+                multiple
+                filterable
+                clearable
+                placeholder="选择角色（运行时展开为该角色下用户）"
+                style="width: 100%"
+                @change="handleCandidateRolesChange"
+              >
+                <el-option
+                  v-for="r in roleOptions"
+                  :key="String(r.id)"
+                  :label="`${r.roleName}（${r.roleCode}）`"
+                  :value="String(r.id)"
+                />
+              </el-select>
             </el-form-item>
-            
-            <!-- 监听器配置 -->
+            <el-alert
+              v-if="isUserTask && elementProperties.candidateRoleList?.length"
+              type="info"
+              :closable="false"
+              show-icon
+              title="候选组存角色ID，任务创建时自动展开为角色下用户名作为候选人"
+              style="margin-bottom: 10px"
+            />
+            <el-alert
+              v-if="isParallelGateway"
+              type="success"
+              :closable="false"
+              show-icon
+              title="并行网关（与）：所有分支同时执行，全部完成后汇聚"
+            />
+            <el-alert
+              v-if="isExclusiveGateway"
+              type="warning"
+              :closable="false"
+              show-icon
+              title="排他网关（或）：按出线条件表达式只走一条分支"
+            />
+
+            <!-- 监听器配置（支持多个） -->
             <el-divider v-if="isUserTask || isStartEvent || isEndEvent">监听器配置</el-divider>
-            <el-form-item label="启用监听器" v-if="isUserTask || isStartEvent || isEndEvent">
-              <el-switch v-model="elementProperties.enableListener" @change="handleListenerToggle" />
-            </el-form-item>
-            <template v-if="(isUserTask || isStartEvent || isEndEvent) && elementProperties.enableListener">
-              <el-form-item label="监听器类型">
-                <el-select v-model="elementProperties.listenerType" placeholder="请选择监听器类型" @change="handleListenerTypeChange">
-                  <el-option label="任务监听器" value="task" v-if="isUserTask" />
-                  <el-option label="执行监听器" value="execution" v-if="isStartEvent || isEndEvent" />
-                </el-select>
-              </el-form-item>
-              <el-form-item label="监听事件">
-                <el-select v-model="elementProperties.listenerEvent" placeholder="请选择监听事件" @change="handleListenerEventChange">
-                  <!-- 任务监听器事件 -->
-                  <template v-if="isUserTask">
-                    <el-option label="创建" value="create" />
-                    <el-option label="分配" value="assignment" />
-                    <el-option label="完成" value="complete" />
-                    <el-option label="删除" value="delete" />
-                  </template>
-                  <!-- 执行监听器事件 -->
-                  <template v-if="isStartEvent">
-                    <el-option label="开始" value="start" />
-                  </template>
-                  <template v-if="isEndEvent">
-                    <el-option label="结束" value="end" />
-                  </template>
-                </el-select>
-              </el-form-item>
-              <el-form-item label="监听器实现">
-                <el-select v-model="elementProperties.listenerDelegate" placeholder="请选择监听器实现" @change="handleListenerDelegateChange">
-                  <el-option label="Flowable任务监听器" value="${flowableTaskListener}" v-if="isUserTask" />
-                  <el-option label="Flowable执行监听器" value="${flowableExecutionListener}" v-if="isStartEvent || isEndEvent" />
-                </el-select>
-              </el-form-item>
+            <template v-if="isUserTask || isStartEvent || isEndEvent">
+              <div class="listener-toolbar">
+                <span class="listener-count">已配置 {{ elementProperties.listeners.length }} 个</span>
+                <el-button size="small" type="primary" plain @click="addListenerRow">添加监听器</el-button>
+              </div>
+              <el-empty
+                v-if="!elementProperties.listeners.length"
+                description="暂无监听器"
+                :image-size="48"
+              />
+              <div
+                v-for="(listener, index) in elementProperties.listeners"
+                :key="index"
+                class="listener-row"
+              >
+                <div class="listener-row-header">
+                  <span>监听器 #{{ index + 1 }}</span>
+                  <el-button size="small" type="danger" link @click="removeListenerRow(index)">删除</el-button>
+                </div>
+                <el-form-item label="类型">
+                  <el-select v-model="listener.type" style="width: 100%" @change="() => handleListenerRowChange(index)">
+                    <el-option label="任务监听器" value="task" v-if="isUserTask" />
+                    <el-option label="执行监听器" value="execution" v-if="isStartEvent || isEndEvent" />
+                  </el-select>
+                </el-form-item>
+                <el-form-item label="事件">
+                  <el-select v-model="listener.event" style="width: 100%">
+                    <template v-if="listener.type === 'task'">
+                      <el-option label="创建" value="create" />
+                      <el-option label="分配" value="assignment" />
+                      <el-option label="完成" value="complete" />
+                      <el-option label="删除" value="delete" />
+                    </template>
+                    <template v-else>
+                      <el-option v-if="isStartEvent" label="开始" value="start" />
+                      <el-option v-if="isEndEvent" label="结束" value="end" />
+                      <el-option label="完成" value="end" />
+                    </template>
+                  </el-select>
+                </el-form-item>
+                <el-form-item label="实现">
+                  <el-select v-model="listener.delegate" style="width: 100%" filterable allow-create default-first-option>
+                    <el-option
+                      v-for="name in listener.type === 'task' ? taskListenerOptions : executionListenerOptions"
+                      :key="name"
+                      :label="name"
+                      :value="`\${${name}}`"
+                    />
+                  </el-select>
+                </el-form-item>
+              </div>
             </template>
           </el-form>
         </el-card>
@@ -161,6 +251,9 @@ const customTranslateModule = {
 }
 import type { FlowableModelDetail, FlowableNodeAction } from '@/api/flowable'
 import { saveFlowableModel, publishFlowableModel } from '@/api/flowable'
+import { getUserPage } from '@/api/user'
+import { getRoleList } from '@/api/role'
+import type { RoleInfo, UserInfo } from '@/types'
 
 const props = withDefaults(defineProps<{
   embedded?: boolean
@@ -200,13 +293,25 @@ const elementProperties = reactive({
   assignee: '',
   candidateUsers: '',
   candidateGroups: '',
+  candidateUserList: [] as string[],
+  candidateRoleList: [] as string[],
   conditionExpression: '',
-  // 监听器配置
-  enableListener: true,
-  listenerType: 'task',
-  listenerEvent: 'create',
-  listenerDelegate: '${flowableTaskListener}'
+  // 多监听器
+  listeners: [] as Array<{ type: string; event: string; delegate: string }>
 })
+
+// 用户/角色选择器
+const userSelectLoading = ref(false)
+const assigneeUserOptions = ref<UserInfo[]>([])
+const candidateUserOptions = ref<UserInfo[]>([])
+const roleOptions = ref<RoleInfo[]>([])
+const taskListenerOptions = ref<string[]>([
+  'candidateExpandTaskListener',
+  'logTaskListener',
+  'notifyTaskListener',
+  'flowableTaskListener'
+])
+const executionListenerOptions = ref<string[]>(['flowableExecutionListener'])
 
 // 计算属性
 const isUserTask = computed(() => {
@@ -220,6 +325,84 @@ const isStartEvent = computed(() => {
 const isEndEvent = computed(() => {
   return selectedElement.value?.type === 'bpmn:EndEvent'
 })
+
+const isParallelGateway = computed(() => {
+  return selectedElement.value?.type === 'bpmn:ParallelGateway'
+})
+
+const isExclusiveGateway = computed(() => {
+  return selectedElement.value?.type === 'bpmn:ExclusiveGateway'
+})
+
+const loadRoles = async () => {
+  if (roleOptions.value.length) return
+  try {
+    const list: any = await getRoleList()
+    roleOptions.value = Array.isArray(list) ? list : (list?.records || [])
+  } catch (e) {
+    console.error('加载角色失败', e)
+  }
+}
+
+const searchAssigneeUsers = async (keyword: string) => {
+  userSelectLoading.value = true
+  try {
+    const res: any = await getUserPage(1, 20, keyword || undefined)
+    assigneeUserOptions.value = res?.records || []
+  } finally {
+    userSelectLoading.value = false
+  }
+}
+
+const searchCandidateUsers = async (keyword: string) => {
+  userSelectLoading.value = true
+  try {
+    const res: any = await getUserPage(1, 20, keyword || undefined)
+    candidateUserOptions.value = res?.records || []
+  } finally {
+    userSelectLoading.value = false
+  }
+}
+
+const handleCandidateUsersChange = (list: string[]) => {
+  elementProperties.candidateUsers = (list || []).join(',')
+  handlePropertyChange('candidateUsers')
+}
+
+const handleCandidateRolesChange = (list: string[]) => {
+  elementProperties.candidateGroups = (list || []).join(',')
+  handlePropertyChange('candidateGroups')
+}
+
+const addListenerRow = () => {
+  const defaults = getDefaultListenerSettings()
+  elementProperties.listeners.push({ ...defaults })
+  syncListenersToElement()
+}
+
+const removeListenerRow = (index: number) => {
+  elementProperties.listeners.splice(index, 1)
+  syncListenersToElement()
+}
+
+const handleListenerRowChange = (_index: number) => {
+  syncListenersToElement()
+}
+
+// 监听器字段变更时同步
+watch(
+  () => elementProperties.listeners,
+  () => syncListenersToElement(),
+  { deep: true }
+)
+
+const syncListenersToElement = () => {
+  if (!selectedElement.value) return
+  selectedElement.value.listenerConfig = {
+    enable: elementProperties.listeners.length > 0,
+    listeners: JSON.parse(JSON.stringify(elementProperties.listeners))
+  }
+}
 
 const getDefaultListenerSettings = () => {
   if (isUserTask.value) {
@@ -353,19 +536,16 @@ const initModeler = async () => {
           updateElementProperties()
         } else {
           selectedElement.value = null
-          // 清空属性表单
           Object.assign(elementProperties, {
             id: '',
             name: '',
             assignee: '',
             candidateUsers: '',
             candidateGroups: '',
+            candidateUserList: [],
+            candidateRoleList: [],
             conditionExpression: '',
-            // 监听器配置
-            enableListener: true,
-            listenerType: 'task',
-            listenerEvent: 'create',
-            listenerDelegate: '${flowableTaskListener}'
+            listeners: []
           })
         }
       } catch (error) {
@@ -395,19 +575,16 @@ const initModeler = async () => {
 const updateElementProperties = () => {
   try {
     if (!selectedElement.value) {
-      // 清空属性表单
       Object.assign(elementProperties, {
         id: '',
         name: '',
         assignee: '',
         candidateUsers: '',
         candidateGroups: '',
+        candidateUserList: [],
+        candidateRoleList: [],
         conditionExpression: '',
-        // 监听器配置
-        enableListener: true,
-        listenerType: 'task',
-        listenerEvent: 'create',
-        listenerDelegate: '${flowableTaskListener}'
+        listeners: []
       })
       return
     }
@@ -420,59 +597,65 @@ const updateElementProperties = () => {
       return
     }
 
-    const defaultListenerSettings = getDefaultListenerSettings()
-    let listenerConfig = {
-      enable: false,
-      ...defaultListenerSettings
-    }
-
-    // 检查元素是否已有监听器配置
-    if (selectedElement.value.listenerConfig) {
-      listenerConfig = {
-        enable: selectedElement.value.listenerConfig.enable !== false,
-        ...selectedElement.value.listenerConfig
-      }
-    } else {
-      const parsedConfig = parseListenerConfigFromBusinessObject(
-        businessObject,
-        defaultListenerSettings
-      )
-      if (parsedConfig) {
-        listenerConfig = parsedConfig
-        selectedElement.value.listenerConfig = { ...parsedConfig }
-      }
-    }
+    const candidateUsers = getFlowableAttribute(businessObject, 'candidateUsers')
+    const candidateGroups = getFlowableAttribute(businessObject, 'candidateGroups')
+    const listeners = loadListenersFromElement(element, businessObject)
 
     Object.assign(elementProperties, {
       id: element.id || '',
       name: businessObject.name || '',
       assignee: getFlowableAttribute(businessObject, 'assignee'),
-      candidateUsers: getFlowableAttribute(businessObject, 'candidateUsers'),
-      candidateGroups: getFlowableAttribute(businessObject, 'candidateGroups'),
+      candidateUsers,
+      candidateGroups,
+      candidateUserList: candidateUsers ? candidateUsers.split(',').filter(Boolean) : [],
+      candidateRoleList: candidateGroups ? candidateGroups.split(',').filter(Boolean) : [],
       conditionExpression: businessObject.conditionExpression || '',
-      // 监听器配置
-      enableListener: listenerConfig.enable,
-      listenerType: listenerConfig.type,
-      listenerEvent: listenerConfig.event,
-      listenerDelegate: listenerConfig.delegate
+      listeners
     })
   } catch (error) {
     console.error('更新元素属性失败:', error)
-    // 清空属性表单作为备用方案
     Object.assign(elementProperties, {
       id: '',
       name: '',
       assignee: '',
       candidateUsers: '',
       candidateGroups: '',
+      candidateUserList: [],
+      candidateRoleList: [],
       conditionExpression: '',
-      // 监听器配置
-      enableListener: true,
-      listenerType: 'task',
-      listenerEvent: 'create',
-      listenerDelegate: '${flowableTaskListener}'
+      listeners: []
     })
   }
+}
+
+const loadListenersFromElement = (element: any, businessObject: any) => {
+  if (element?.listenerConfig?.listeners?.length) {
+    return JSON.parse(JSON.stringify(element.listenerConfig.listeners))
+  }
+  const defaults = getDefaultListenerSettings()
+  const values = businessObject?.extensionElements?.values
+  if (!Array.isArray(values)) return []
+  const out: Array<{ type: string; event: string; delegate: string }> = []
+  values.forEach((item: any) => {
+    const type = (item?.$type || '').toString().toLowerCase()
+    if (type.includes('tasklistener')) {
+      out.push({
+        type: 'task',
+        event: item.event || 'create',
+        delegate: item.delegateExpression || item.class || defaults.delegate
+      })
+    } else if (type.includes('executionlistener')) {
+      out.push({
+        type: 'execution',
+        event: item.event || defaults.event,
+        delegate: item.delegateExpression || item.class || '${flowableExecutionListener}'
+      })
+    }
+  })
+  if (out.length) {
+    element.listenerConfig = { enable: true, listeners: out }
+  }
+  return out
 }
 
 // 更新元素属性
@@ -521,87 +704,6 @@ const handlePropertyChange = (property: string) => {
   nextTick(() => {
     updateElementProperty(property, (elementProperties as any)[property])
   })
-}
-
-// 监听器相关方法
-const handleListenerToggle = () => {
-  try {
-    console.log('=== 监听器开关切换 ===')
-    console.log('selectedElement:', selectedElement.value)
-    console.log('modeler:', modeler)
-    console.log('enableListener:', elementProperties.enableListener)
-    console.log('isUserTask:', isUserTask.value)
-    console.log('isStartEvent:', isStartEvent.value)
-    console.log('isEndEvent:', isEndEvent.value)
-    
-    if (!selectedElement.value || !modeler) {
-      console.warn('缺少必要组件: selectedElement或modeler')
-      return
-    }
-    
-    // 直接保存监听器配置到元素属性中
-    if (elementProperties.enableListener) {
-      console.log('启用监听器')
-      selectedElement.value.listenerConfig = {
-        enable: true,
-        type: isUserTask.value ? 'task' : 'execution',
-        event: elementProperties.listenerEvent,
-        delegate: elementProperties.listenerDelegate
-      }
-    } else {
-      console.log('禁用监听器')
-      selectedElement.value.listenerConfig = {
-        enable: false,
-        type: elementProperties.listenerType,
-        event: elementProperties.listenerEvent,
-        delegate: elementProperties.listenerDelegate
-      }
-    }
-    
-    console.log('监听器配置已保存到元素属性')
-    console.log('=== 监听器开关切换完成 ===')
-    
-  } catch (error: any) {
-    console.error('监听器开关切换失败:', error)
-    console.error('错误堆栈:', error.stack)
-  }
-}
-
-const handleListenerTypeChange = () => {
-  // 根据节点类型设置默认值
-  const defaults = getDefaultListenerSettings()
-  elementProperties.listenerType = defaults.type
-  elementProperties.listenerEvent = defaults.event
-  elementProperties.listenerDelegate = defaults.delegate
-
-  if (!selectedElement.value || !elementProperties.enableListener) return
-
-  if (!selectedElement.value.listenerConfig) {
-    selectedElement.value.listenerConfig = { enable: true, ...defaults }
-  } else {
-    selectedElement.value.listenerConfig.type = defaults.type
-    selectedElement.value.listenerConfig.event = defaults.event
-    selectedElement.value.listenerConfig.delegate = defaults.delegate
-    selectedElement.value.listenerConfig.enable = true
-  }
-}
-
-const handleListenerEventChange = () => {
-  if (!selectedElement.value || !modeler || !elementProperties.enableListener) return
-  
-  // 更新元素中的监听器配置
-  if (selectedElement.value.listenerConfig) {
-    selectedElement.value.listenerConfig.event = elementProperties.listenerEvent
-  }
-}
-
-const handleListenerDelegateChange = () => {
-  if (!selectedElement.value || !modeler || !elementProperties.enableListener) return
-  
-  // 更新元素中的监听器配置
-  if (selectedElement.value.listenerConfig) {
-    selectedElement.value.listenerConfig.delegate = elementProperties.listenerDelegate
-  }
 }
 
 const ensureFlowableNamespace = (xmlDoc: Document) => {
@@ -784,37 +886,39 @@ const addListenerConfigToXml = (xmlDoc: Document) => {
         }
         
         if (targetElement) {
-          console.log('找到XML元素:', targetElement.tagName)
-
           const extensionElements = ensureExtensionElements(xmlDoc, targetElement)
-          
-          // 根据监听器类型创建对应的监听器
           const listenerConfig = element.listenerConfig
-          if (!listenerConfig || !listenerConfig.type) return
+          if (!listenerConfig) return
 
-          removeExistingListeners(extensionElements, listenerConfig.type)
-          if (listenerConfig.enable === false) return
+          const listeners: Array<{ type: string; event: string; delegate: string }> =
+            Array.isArray(listenerConfig.listeners) && listenerConfig.listeners.length
+              ? listenerConfig.listeners
+              : listenerConfig.type
+                ? [{
+                    type: listenerConfig.type,
+                    event: listenerConfig.event,
+                    delegate: listenerConfig.delegate
+                  }]
+                : []
 
-          let listenerElement
-          if (listenerConfig.type === 'task') {
-            listenerElement = xmlDoc.createElement('flowable:taskListener')
-            listenerElement.setAttribute('event', listenerConfig.event)
-            listenerElement.setAttribute('delegateExpression', listenerConfig.delegate)
-          } else if (listenerConfig.type === 'execution') {
-            listenerElement = xmlDoc.createElement('flowable:executionListener')
-            listenerElement.setAttribute('event', listenerConfig.event)
-            listenerElement.setAttribute('delegateExpression', listenerConfig.delegate)
-          }
-          
-          if (listenerElement) {
+          // 先清掉旧的 task/execution listener，再写入多条
+          removeExistingListeners(extensionElements, 'task')
+          removeExistingListeners(extensionElements, 'execution')
+          if (listenerConfig.enable === false || !listeners.length) return
+
+          listeners.forEach((cfg) => {
+            if (!cfg?.type || !cfg?.delegate) return
+            let listenerElement
+            if (cfg.type === 'task') {
+              listenerElement = xmlDoc.createElement('flowable:taskListener')
+            } else if (cfg.type === 'execution') {
+              listenerElement = xmlDoc.createElement('flowable:executionListener')
+            }
+            if (!listenerElement) return
+            listenerElement.setAttribute('event', cfg.event || 'create')
+            listenerElement.setAttribute('delegateExpression', cfg.delegate)
             extensionElements.appendChild(listenerElement)
-            console.log('监听器配置已添加到XML:', listenerElement.tagName)
-            
-            // 输出当前XML片段用于调试
-            const serializer = new XMLSerializer()
-            const xmlFragment = serializer.serializeToString(extensionElements)
-            console.log('生成的XML片段:', xmlFragment)
-          }
+          })
         } else {
           console.warn('未找到对应的XML元素:', element.id, element.type)
         }
@@ -966,7 +1070,10 @@ const saveModel = async () => {
       nodeActions: nodeActions
     }
 
-    await saveFlowableModel(modelData)
+    const savedId = await saveFlowableModel(modelData)
+    if (savedId) {
+      modelInfo.id = savedId as any
+    }
     ElMessage.success('模型保存成功')
 
   } catch (error) {
@@ -1000,7 +1107,10 @@ const publishModel = async () => {
     }
 
     const savedId = await saveFlowableModel(modelData)
-    await publishFlowableModel(savedId)
+    if (savedId) {
+      modelInfo.id = savedId as any
+      await publishFlowableModel(savedId as any)
+    }
 
     ElMessage.success('模型发布成功')
 
@@ -1070,6 +1180,7 @@ onMounted(async () => {
   
   try {
     applyIncomingModelInfo(props.modelInfo)
+    await loadRoles()
     await initModeler()
     console.log('流程设计器初始化成功')
   } catch (error) {
@@ -1136,7 +1247,37 @@ onUnmounted(() => {
   .properties-panel {
     margin-top: 20px;
     min-height: 220px;
-    
+
+    .listener-toolbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+
+      .listener-count {
+        font-size: 12px;
+        color: #909399;
+      }
+    }
+
+    .listener-row {
+      border: 1px solid #ebeef5;
+      border-radius: 6px;
+      padding: 8px 10px 0;
+      margin-bottom: 10px;
+      background: #fafafa;
+
+      .listener-row-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 6px;
+        font-size: 12px;
+        font-weight: 600;
+        color: #606266;
+      }
+    }
+
     .el-card {
       max-width: 400px;
     }
