@@ -184,6 +184,7 @@ request.interceptors.request.use(
         const userStore = useUserStore()
         if (userStore.token && config.headers) {
             config.headers.Authorization = `Bearer ${userStore.token}`
+            config.headers['X-Client-Id'] = 'admin'
         }
         return config
     },

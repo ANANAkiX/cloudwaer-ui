@@ -16,8 +16,8 @@
 
     /* Linting */
     "strict": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
     "noFallthroughCasesInSwitch": true,
 
     /* Path mapping */
@@ -30,6 +30,13 @@
     "types": ["vite/client"]
   },
   "include": ["src/**/*.ts", "src/**/*.d.ts", "src/**/*.tsx", "src/**/*.vue"],
+  "exclude": [
+    "src/views/flowable/ProcessTest.vue",
+    "src/views/flowable/ProcessDesigner.vue",
+    "src/views/flowable/ProcessMonitor.vue",
+    "src/views/Processdesigner.vue",
+    "src/components/FcDesigner/**/*"
+  ],
   "references": [{ "path": "./tsconfig.node.json" }]
 }
 

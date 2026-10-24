@@ -14,6 +14,7 @@ import FcDesigner, { formCreate } from '@/components/FcDesigner'
 import { ElBadge } from 'element-plus'
 import { i18n } from '@/i18n'
 import { useAppStore } from '@/stores/app'
+import { permissionDirective } from '@/utils/permission'
 
 const app = createApp(App)
 const pinia = createPinia()
@@ -22,6 +23,7 @@ const pinia = createPinia()
 for (const [key, component] of Object.entries(ElementPlusIconsVue)) {
   app.component(key, component)
 }
+app.directive('permission', permissionDirective)
 app.use(FcDesigner)
 app.use(formCreate)
 app.use(ElBadge)

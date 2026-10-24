@@ -14,11 +14,14 @@
 # 安装依赖
 npm install
 
-# 本地开发
+# 本地开发（默认 :4000）
 npm run dev
 
 # 生产构建
 npm run build
+
+# 类型检查（vue-tsc@2；Flowable 设计器大页暂 exclude）
+npm run typecheck
 
 # 预览构建结果
 npm run preview

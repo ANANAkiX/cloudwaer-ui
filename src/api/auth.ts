@@ -19,6 +19,7 @@ export interface LoginRequestDTO {
     password: string
     loginType: string
     scope: string
+    clientId: string
 }
 
 /**

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import {
   pageDict,
   saveDict,
@@ -18,6 +18,12 @@ import { message } from '@/api/request.ts'
 import DictSelect from '@/components/DictSelect.vue'
 import { ElMessageBox } from 'element-plus'
 import { Plus, Search, Refresh } from '@element-plus/icons-vue'
+import { checkButtonPermission } from '@/utils/permission'
+
+const canAdd = computed(() => checkButtonPermission('dict', 'admin:dict:add'))
+const canEdit = computed(() => checkButtonPermission('dict', 'admin:dict:edit'))
+const canDelete = computed(() => checkButtonPermission('dict', 'admin:dict:delete'))
+const canRefresh = computed(() => checkButtonPermission('dict', 'admin:dict:refresh'))
 
 const loading = ref(false)
 const itemLoading = ref(false)
@@ -249,11 +255,11 @@ onMounted(fetchPage)
               <el-icon><Search /></el-icon>
               搜索
             </el-button>
-            <el-button type="primary" @click="onAddDict">
+            <el-button v-if="canAdd" type="primary" @click="onAddDict">
               <el-icon><Plus /></el-icon>
               新增字典
             </el-button>
-            <el-button type="warning" @click="onRefreshCache">
+            <el-button v-if="canRefresh" type="warning" @click="onRefreshCache">
               <el-icon><Refresh /></el-icon>
               刷新缓存
             </el-button>
@@ -281,8 +287,8 @@ onMounted(fetchPage)
         <el-table-column prop="description" label="备注" min-width="220" align="center" />
         <el-table-column label="操作" width="160" fixed="right" align="center">
           <template #default="{ row }">
-            <el-button link type="primary" @click="onEditDict(row)">编辑</el-button>
-            <el-button link type="danger" @click="onDeleteDict(row)">删除</el-button>
+            <el-button v-if="canEdit" link type="primary" @click="onEditDict(row)">编辑</el-button>
+            <el-button v-if="canDelete" link type="danger" @click="onDeleteDict(row)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>

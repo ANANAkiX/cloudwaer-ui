@@ -94,6 +94,116 @@ export const ButtonPermissionConfig: Record<string, PermissionConfig[]> = {
       visible: true
     }
   ],
+
+  // 字典管理
+  'dict': [
+    { permissionCode: 'admin:dict:add', visible: true },
+    { permissionCode: 'admin:dict:edit', visible: true },
+    { permissionCode: 'admin:dict:delete', visible: true },
+    { permissionCode: 'admin:dict:refresh', visible: true }
+  ],
+
+  // 代码生成
+  'codegen': [
+    { permissionCode: 'codegen:connection:add', visible: true },
+    { permissionCode: 'codegen:connection:edit', visible: true },
+    { permissionCode: 'codegen:connection:delete', visible: true },
+    { permissionCode: 'codegen:connection:toggle', visible: true },
+    { permissionCode: 'codegen:generator:all', visible: true },
+    { permissionCode: 'codegen:generator:backend', visible: true },
+    { permissionCode: 'codegen:generator:frontend', visible: true }
+  ],
+
+  // Flowable 模型管理（主操作）
+  'flowableModel': [
+    { permissionCode: 'flowable:model:save', visible: true },
+    { permissionCode: 'flowable:model:publish', visible: true },
+    { permissionCode: 'flowable:model:delete', visible: true },
+    { permissionCode: 'flowable:model:copy', visible: true }
+  ],
+
+  // Flowable 任务
+  'flowableTask': [
+    { permissionCode: 'flowable:task:claim', visible: true },
+    { permissionCode: 'flowable:task:complete', visible: true },
+    { permissionCode: 'flowable:task:delete', visible: true }
+  ],
+
+  // 博客主申请
+  'blogAuthor': [
+    {
+      permissionCode: 'blog:author:handle',
+      visible: true
+    }
+  ],
+
+  // 微论坛话题
+  'blogTopic': [
+    {
+      permissionCode: 'blog:topic:manage',
+      visible: true
+    }
+  ],
+
+  // 博客文章
+  'blogArticle': [
+    {
+      permissionCode: 'blog:article:add',
+      visible: true
+    },
+    {
+      permissionCode: 'blog:article:edit',
+      visible: true
+    },
+    {
+      permissionCode: 'blog:article:delete',
+      visible: true
+    }
+  ],
+
+  // 博客分类
+  'blogCategory': [
+    {
+      permissionCode: 'blog:category:add',
+      visible: true
+    },
+    {
+      permissionCode: 'blog:category:edit',
+      visible: true
+    },
+    {
+      permissionCode: 'blog:category:delete',
+      visible: true
+    }
+  ],
+
+  // 博客标签
+  'blogTag': [
+    {
+      permissionCode: 'blog:tag:add',
+      visible: true
+    },
+    {
+      permissionCode: 'blog:tag:edit',
+      visible: true
+    },
+    {
+      permissionCode: 'blog:tag:delete',
+      visible: true
+    }
+  ],
+
+  // 博客评论审核
+  'blogComment': [
+    {
+      permissionCode: 'blog:comment:audit',
+      visible: true
+    },
+    {
+      permissionCode: 'blog:comment:delete',
+      visible: true
+    }
+  ],
 }
 
 /**

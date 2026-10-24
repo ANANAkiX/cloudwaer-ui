@@ -182,7 +182,8 @@ const handleLogin = async (): Promise<void> => {
           email: loginMode.value === 'email' ? loginForm.email : undefined,
           password: loginForm.password,
           loginType: loginMode.value === 'email' ? 'EMAIL_PASSWORD' : 'ACCESS_PASSWORD',
-          scope: 'DEFAULT'
+          scope: 'DEFAULT',
+          clientId: 'admin'
         }
         const result = await userStore.login(payload, captchaPayload)
         if (result.success) {
