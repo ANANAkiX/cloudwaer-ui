@@ -158,6 +158,10 @@ export const ButtonPermissionConfig: Record<string, PermissionConfig[]> = {
     {
       permissionCode: 'blog:article:delete',
       visible: true
+    },
+    {
+      permissionCode: 'blog:article:import',
+      visible: true
     }
   ],
 
@@ -201,6 +205,18 @@ export const ButtonPermissionConfig: Record<string, PermissionConfig[]> = {
     },
     {
       permissionCode: 'blog:comment:delete',
+      visible: true
+    }
+  ],
+
+  // 博客站点设置
+  'blogSetting': [
+    {
+      permissionCode: 'blog:setting:view',
+      visible: true
+    },
+    {
+      permissionCode: 'blog:setting:edit',
       visible: true
     }
   ],
