@@ -197,17 +197,8 @@ export const ButtonPermissionConfig: Record<string, PermissionConfig[]> = {
     }
   ],
 
-  // 博客评论审核
-  'blogComment': [
-    {
-      permissionCode: 'blog:comment:audit',
-      visible: true
-    },
-    {
-      permissionCode: 'blog:comment:delete',
-      visible: true
-    }
-  ],
+  // 博客评论/审核中心：按钮码已收敛为登录+服务端 ADMIN，前端不依赖旧 comment:* 码
+  'blogComment': [],
 
   // 博客站点设置
   'blogSetting': [
@@ -217,6 +208,46 @@ export const ButtonPermissionConfig: Record<string, PermissionConfig[]> = {
     },
     {
       permissionCode: 'blog:setting:edit',
+      visible: true
+    }
+  ],
+
+  // 博客合集管理
+  'blogCollection': [
+    {
+      permissionCode: 'blog:collection:view',
+      visible: true
+    },
+    {
+      permissionCode: 'blog:collection:add',
+      visible: true
+    },
+    {
+      permissionCode: 'blog:collection:edit',
+      visible: true
+    },
+    {
+      permissionCode: 'blog:collection:delete',
+      visible: true
+    }
+  ],
+
+  // 平台文件管理
+  'sysFile': [
+    {
+      permissionCode: 'sys:file:view',
+      visible: true
+    },
+    {
+      permissionCode: 'sys:file:upload',
+      visible: true
+    },
+    {
+      permissionCode: 'sys:file:delete',
+      visible: true
+    },
+    {
+      permissionCode: 'sys:oss:config',
       visible: true
     }
   ],

@@ -543,26 +543,16 @@ const handleAssignSubmit = async () => {
     message.success('分配权限成功')
     assignDialogVisible.value = false
     loadRoleList()
-    
-    // 检查当前用户是否拥有被分配权限的角色
-    const currentUserRoleIds = userStore.userInfo?.roleIds || []
-    const currentRoleIdStr = String(currentRoleId.value)
-    const hasRole = currentUserRoleIds.some(roleId => String(roleId) === currentRoleIdStr)
-    
-    // 如果当前用户拥有该角色，重新获取权限代码集合和路由信息
-    if (hasRole) {
-      try {
-        // 重新获取权限代码集合
-        await userStore.loadUserPermissions()
-        // 重新获取路由信息
-        await userStore.loadUserRoutes()
-        // 重新加载路由到 router 中
-        await reloadRoutes()
-        message.success('权限已更新')
-      } catch (error) {
-        console.error('更新权限和路由失败:', error)
-        // 不显示错误，因为分配权限已经成功
-      }
+
+    // 授权后强制刷新当前用户权限/菜单（不依赖 roleIds 是否齐全）
+    // 自己给自己的角色授权时立刻生效
+    try {
+      await userStore.loadUserInfo()
+      await userStore.loadUserPermissions()
+      await userStore.loadUserRoutes()
+      await reloadRoutes()
+    } catch (error) {
+      console.error('更新权限和路由失败:', error)
     }
   } catch (error) {
     console.error('分配权限失败:', error)
