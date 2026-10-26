@@ -6,18 +6,23 @@ import {
   deleteComment,
   pageArticles,
   auditArticle,
+  pageAuthorApplies,
+  handleAuthorApply,
   type BlogComment,
-  type BlogArticle
+  type BlogArticle,
+  type AuthorApply
 } from '@/api/blog'
+import { getUserById, assignRoles } from '@/api/user'
+import { getRoleList } from '@/api/role'
 import { message } from '@/api/request.ts'
 import { ElMessageBox } from 'element-plus'
-import { Search, Refresh } from '@element-plus/icons-vue'
+import { Search, Refresh, Check, Close } from '@element-plus/icons-vue'
 import { checkButtonPermission } from '@/utils/permission'
 
 const can = (code: string) => checkButtonPermission('blogComment', code)
 
-/** 待办类型：文章发布审核 / 评论审核 */
-const tab = ref<'article' | 'comment'>('article')
+/** 待办类型：文章发布 / 评论 / 博客主申请 */
+const tab = ref<'article' | 'comment' | 'author'>('article')
 
 // ===== 文章审核 =====
 const articleLoading = ref(false)
@@ -181,14 +186,123 @@ const onDeleteComment = async (row: BlogComment) => {
 const onTabChange = (name: string | number) => {
   if (name === 'article') {
     fetchArticles()
+  } else if (name === 'author') {
+    fetchAuthors()
   } else {
     fetchComments()
   }
 }
 
+// ===== 博客主申请（原独立页并入） =====
+const authorLoading = ref(false)
+const authors = ref<AuthorApply[]>([])
+const authorTotal = ref(0)
+const authorRoles = ref<{ id: string | number; roleCode?: string; roleName?: string }[]>([])
+const authorQuery = reactive({
+  current: 1,
+  size: 20,
+  keyword: '',
+  applyStatus: undefined as number | undefined
+})
+
+const applyStatusMap: Record<number, string> = { 0: '待处理', 1: '已通过', 2: '已拒绝' }
+const applyStatusType = (s: number): 'warning' | 'success' | 'danger' =>
+  s === 1 ? 'success' : s === 2 ? 'danger' : 'warning'
+
+const fetchAuthors = async () => {
+  authorLoading.value = true
+  try {
+    const res = await pageAuthorApplies({
+      current: authorQuery.current,
+      size: authorQuery.size,
+      keyword: authorQuery.keyword || undefined,
+      applyStatus: authorQuery.applyStatus
+    })
+    authors.value = res.records || []
+    authorTotal.value = Number(res.total || 0)
+  } finally {
+    authorLoading.value = false
+  }
+}
+
+const onAuthorSearch = () => {
+  authorQuery.current = 1
+  fetchAuthors()
+}
+
+const onAuthorReset = () => {
+  authorQuery.keyword = ''
+  authorQuery.applyStatus = undefined
+  onAuthorSearch()
+}
+
+/** 惰性拉角色表（需 admin:role:view；仅点「通过」时才触发） */
+const ensureAuthorRoles = async () => {
+  if (authorRoles.value.length) return true
+  try {
+    authorRoles.value = ((await getRoleList()) as typeof authorRoles.value) || []
+    return true
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '加载角色失败（需角色管理权限）')
+    return false
+  }
+}
+
+const bloggerRoleId = () => {
+  const hit = authorRoles.value.find(
+    r => r.roleCode === 'BLOGGER' || r.roleName === 'BLOGGER' || (r.roleName || '').includes('博客')
+  )
+  return hit ? String(hit.id) : ''
+}
+
+const onApproveAuthor = async (row: AuthorApply) => {
+  try {
+    await ElMessageBox.confirm(
+      `确定通过「${row.username}」的博客主申请吗？将自动分配 BLOGGER 角色。`,
+      '通过申请',
+      { confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning' }
+    )
+  } catch {
+    return
+  }
+  if (!(await ensureAuthorRoles())) return
+  const bloggerId = bloggerRoleId()
+  if (!bloggerId) {
+    message.error('未找到 BLOGGER 角色，请先在角色管理初始化')
+    return
+  }
+  await handleAuthorApply(String(row.id), 1, '审核中心通过并分配 BLOGGER')
+  const user = await getUserById(String(row.userId))
+  const roleIds = (user.roleIds || []).map(String)
+  if (!roleIds.includes(bloggerId)) {
+    roleIds.push(bloggerId)
+    await assignRoles(String(row.userId), roleIds)
+  }
+  message.success('已通过并分配博客主角色，权限已即时刷新')
+  await fetchAuthors()
+}
+
+const onRejectAuthor = async (row: AuthorApply) => {
+  let remark = ''
+  try {
+    const { value } = await ElMessageBox.prompt('请输入拒绝备注（可选，将反馈给申请人）', '拒绝申请', {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      inputPlaceholder: '理由说明'
+    })
+    remark = value || ''
+  } catch {
+    return
+  }
+  await handleAuthorApply(String(row.id), 2, remark)
+  message.success('已拒绝')
+  await fetchAuthors()
+}
+
 onMounted(() => {
   fetchArticles()
   fetchComments()
+  fetchAuthors()
 })
 </script>
 
@@ -202,6 +316,7 @@ onMounted(() => {
             <el-radio-group v-model="tab" size="small" @change="onTabChange">
               <el-radio-button value="article">文章发布</el-radio-button>
               <el-radio-button value="comment">评论</el-radio-button>
+              <el-radio-button value="author">博客主申请</el-radio-button>
             </el-radio-group>
           </div>
 
@@ -234,7 +349,7 @@ onMounted(() => {
           </div>
 
           <!-- 评论工具条 -->
-          <div v-else class="card-actions">
+          <div v-else-if="tab === 'comment'" class="card-actions">
             <el-input
               v-model="commentQuery.keyword"
               placeholder="搜索内容/文章"
@@ -258,6 +373,33 @@ onMounted(() => {
             </el-select>
             <el-button type="primary" :icon="Search" @click="onCommentSearch">查询</el-button>
             <el-button :icon="Refresh" @click="onCommentReset">重置</el-button>
+          </div>
+
+          <!-- 博客主申请工具条 -->
+          <div v-else class="card-actions">
+            <el-input
+              v-model="authorQuery.keyword"
+              placeholder="搜索用户名/昵称/理由"
+              clearable
+              style="width: 200px"
+              @keyup.enter="onAuthorSearch"
+            >
+              <template #prefix>
+                <el-icon><Search /></el-icon>
+              </template>
+            </el-input>
+            <el-select
+              v-model="authorQuery.applyStatus"
+              placeholder="状态"
+              clearable
+              style="width: 120px"
+            >
+              <el-option label="待处理" :value="0" />
+              <el-option label="已通过" :value="1" />
+              <el-option label="已拒绝" :value="2" />
+            </el-select>
+            <el-button type="primary" :icon="Search" @click="onAuthorSearch">查询</el-button>
+            <el-button :icon="Refresh" @click="onAuthorReset">重置</el-button>
           </div>
         </div>
       </template>
@@ -295,7 +437,7 @@ onMounted(() => {
       </el-table>
 
       <!-- 评论审核表 -->
-      <el-table v-else v-loading="commentLoading" :data="comments" border style="width: 100%">
+      <el-table v-else-if="tab === 'comment'" v-loading="commentLoading" :data="comments" border style="width: 100%">
         <el-table-column prop="articleTitle" label="文章" min-width="140" align="center" show-overflow-tooltip />
         <el-table-column prop="nickname" label="评论者" width="110" align="center" />
         <el-table-column prop="content" label="内容" min-width="200" align="center" show-overflow-tooltip />
@@ -326,6 +468,41 @@ onMounted(() => {
         </el-table-column>
       </el-table>
 
+      <!-- 博客主申请表 -->
+      <el-table v-else v-loading="authorLoading" :data="authors" border style="width: 100%">
+        <el-table-column prop="username" label="用户名" width="120" align="center" />
+        <el-table-column prop="nickname" label="昵称" width="120" align="center" />
+        <el-table-column prop="reason" label="申请理由" min-width="180" align="center" show-overflow-tooltip />
+        <el-table-column label="状态" width="90" align="center">
+          <template #default="{ row }">
+            <el-tag :type="applyStatusType(row.applyStatus)" size="small">
+              {{ applyStatusMap[row.applyStatus] || row.applyStatus }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="申请时间" width="160" align="center">
+          <template #default="{ row }">{{ formatDate(row.createTime) }}</template>
+        </el-table-column>
+        <el-table-column prop="handleUser" label="处理人" width="110" align="center">
+          <template #default="{ row }">{{ row.handleUser || '—' }}</template>
+        </el-table-column>
+        <el-table-column label="处理时间" width="160" align="center">
+          <template #default="{ row }">{{ formatDate(row.handleTime) }}</template>
+        </el-table-column>
+        <el-table-column prop="handleRemark" label="备注" min-width="130" align="center" show-overflow-tooltip>
+          <template #default="{ row }">{{ row.handleRemark || '—' }}</template>
+        </el-table-column>
+        <el-table-column label="操作" width="150" fixed="right" align="center">
+          <template #default="{ row }">
+            <template v-if="Number(row.applyStatus) === 0">
+              <el-button link type="success" :icon="Check" @click="onApproveAuthor(row)">通过</el-button>
+              <el-button link type="danger" :icon="Close" @click="onRejectAuthor(row)">拒绝</el-button>
+            </template>
+            <span v-else class="dim">已处理</span>
+          </template>
+        </el-table-column>
+      </el-table>
+
       <div class="pagination-container">
         <el-pagination
           v-if="tab === 'article'"
@@ -337,13 +514,22 @@ onMounted(() => {
           @change="fetchArticles"
         />
         <el-pagination
-          v-else
+          v-else-if="tab === 'comment'"
           v-model:current-page="commentQuery.current"
           v-model:page-size="commentQuery.size"
           :total="commentTotal"
           :page-sizes="[20, 50]"
           layout="total, sizes, prev, pager, next, jumper"
           @change="fetchComments"
+        />
+        <el-pagination
+          v-else
+          v-model:current-page="authorQuery.current"
+          v-model:page-size="authorQuery.size"
+          :total="authorTotal"
+          :page-sizes="[20, 50]"
+          layout="total, sizes, prev, pager, next, jumper"
+          @change="fetchAuthors"
         />
       </div>
     </el-card>

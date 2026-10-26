@@ -11,6 +11,8 @@ export interface PageParams {
   current: number
   size: number
   keyword?: string
+  /** 角色筛选（可空；如 4=博客主） */
+  roleId?: string | number
 }
 
 /**

@@ -636,20 +636,14 @@ onMounted(async () => {
 }
 .preview-meta {
   margin: 0 0 12px;
-  color: #909399;
+  color: var(--el-text-color-secondary);
   font-size: 13px;
 }
+/* 正文排版统一走全局 .markdown-body（与 blog-ui 写作页预览一致） */
 .preview-body {
   max-height: 60vh;
   overflow: auto;
-  line-height: 1.75;
   font-size: 14px;
-}
-.preview-body :deep(pre) {
-  background: #f6f8fa;
-  padding: 12px;
-  border-radius: 8px;
-  overflow-x: auto;
 }
 .cover-row {
   display: flex;

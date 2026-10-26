@@ -106,7 +106,44 @@ function triggerBlobDownload(blob: Blob, filename: string) {
 export function listOssConfig(): Promise<SysOssConfigInfo[]> {
   return request({ url: '/admin/file/oss/list', method: 'get' })
 }
-
 export function saveOssConfig(data: SysOssConfigInfo): Promise<boolean> {
   return request({ url: '/admin/file/oss/save', method: 'post', data })
+}
+
+/* ===== 文件预览 ===== */
+
+const IMAGE_EXTS = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'ico'])
+const PDF_EXTS = new Set(['pdf'])
+const VIDEO_EXTS = new Set(['mp4', 'm4v', 'webm', 'ogg', 'ogv'])
+
+export type FilePreviewKind = 'image' | 'pdf' | 'video' | 'text'
+
+function extOf(fileName?: string): string {
+  if (!fileName) return ''
+  const dot = fileName.lastIndexOf('.')
+  return dot >= 0 && dot < fileName.length - 1 ? fileName.slice(dot + 1).toLowerCase() : ''
+}
+
+/** 按扩展名决定预览方式；未知类型走文本抽取（后端不支持时再回退提示） */
+export function previewKind(fileName?: string): FilePreviewKind {
+  const ext = extOf(fileName)
+  if (IMAGE_EXTS.has(ext)) return 'image'
+  if (PDF_EXTS.has(ext)) return 'pdf'
+  if (VIDEO_EXTS.has(ext)) return 'video'
+  return 'text'
+}
+
+/** 取可内联渲染的文件内容（带 Token；img/iframe 无法带头，故拉成 Blob 交给 objectURL） */
+export async function fetchPreviewBlob(id: string | number): Promise<Blob> {
+  return (await request({
+    url: '/admin/file/preview',
+    method: 'get',
+    params: { id },
+    responseType: 'blob'
+  })) as Blob
+}
+
+/** 文本/Office 文档预览（纯文本；docx/xlsx/pptx 由后端抽取正文） */
+export function fetchPreviewText(id: string | number): Promise<string> {
+  return request({ url: '/admin/file/preview-text', method: 'get', params: { id } })
 }

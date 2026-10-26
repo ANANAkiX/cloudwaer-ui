@@ -88,5 +88,152 @@ body {
   color: var(--cw-text);
 }
 
+/* ---------- Markdown 正文渲染（与 blog-ui 写作页预览同一套排版） ----------
+   全部走 --cw-* 主题变量：浅/深色自动适配，不写死浅色十六进制。 */
+.markdown-body {
+  line-height: 1.8;
+  word-wrap: break-word;
+  color: var(--cw-text);
+}
+
+.markdown-body h1,
+.markdown-body h2,
+.markdown-body h3,
+.markdown-body h4,
+.markdown-body h5,
+.markdown-body h6 {
+  color: var(--cw-text);
+}
+
+.markdown-body p,
+.markdown-body li,
+.markdown-body td,
+.markdown-body th,
+.markdown-body dd,
+.markdown-body dt {
+  color: inherit;
+}
+
+.markdown-body pre {
+  position: relative;
+  margin: 16px 0;
+  padding: 14px 16px;
+  background: color-mix(in srgb, var(--cw-text) 6%, var(--cw-surface));
+  border: 1px solid var(--cw-border);
+  border-radius: 10px;
+  overflow-x: auto;
+  font-size: 13.5px;
+  line-height: 1.65;
+  tab-size: 2;
+}
+
+.markdown-body pre::before {
+  content: attr(data-lang);
+  position: absolute;
+  top: 8px;
+  right: 12px;
+  font-size: 11px;
+  line-height: 1;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--el-text-color-secondary);
+  opacity: 0.75;
+  pointer-events: none;
+  user-select: none;
+}
+
+.markdown-body pre[data-lang='']::before,
+.markdown-body pre:not([data-lang])::before {
+  content: none;
+}
+
+.markdown-body pre code {
+  display: block;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
+  font-size: 13.5px;
+  line-height: 1.65;
+  color: var(--cw-text);
+  background: transparent;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  white-space: pre;
+  overflow-wrap: normal;
+}
+
+.markdown-body :not(pre) > code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.9em;
+  background: color-mix(in srgb, var(--cw-accent) 12%, var(--cw-surface));
+  color: var(--cw-accent);
+  padding: 1px 6px;
+  border-radius: 4px;
+  border: 1px solid color-mix(in srgb, var(--cw-accent) 18%, transparent);
+}
+
+.markdown-body blockquote {
+  margin: 16px 0;
+  padding: 12px 16px;
+  border-left: 3px solid var(--cw-accent);
+  border-radius: 0 8px 8px 0;
+  background: color-mix(in srgb, var(--cw-accent) 10%, var(--cw-surface));
+  color: var(--el-text-color-secondary);
+}
+
+.markdown-body blockquote > :first-child {
+  margin-top: 0;
+}
+
+.markdown-body blockquote > :last-child {
+  margin-bottom: 0;
+}
+
+.markdown-body blockquote code {
+  background: color-mix(in srgb, var(--cw-accent) 12%, transparent);
+  color: var(--cw-accent);
+}
+
+/* 表格过长时在容器内横向滚动，不得撑破正文栏 */
+.markdown-body .table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+  margin: 16px 0;
+  -webkit-overflow-scrolling: touch;
+}
+
+.markdown-body table {
+  border-collapse: collapse;
+  margin: 16px 0;
+  width: 100%;
+  font-size: 14px;
+}
+
+.markdown-body .table-wrap table {
+  margin: 0;
+}
+
+.markdown-body th,
+.markdown-body td {
+  border: 1px solid var(--cw-border);
+  padding: 8px 12px;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.markdown-body th {
+  background: color-mix(in srgb, var(--cw-text) 5%, var(--cw-surface));
+  font-weight: 600;
+}
+
+.markdown-body img {
+  max-width: 100%;
+  border-radius: 8px;
+}
+
+.markdown-body hr {
+  border: 0;
+  border-top: 1px dashed var(--cw-border);
+  margin: 28px 0;
+}
 
 

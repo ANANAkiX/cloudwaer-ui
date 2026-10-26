@@ -56,7 +56,7 @@ const h = computed(() => props.height || 320)
   font-size: 13px;
   line-height: 1.6;
   outline: none;
-  background: #fff;
+  background: var(--el-fill-color-blank);
   color: var(--el-text-color-primary, #303133);
   box-sizing: border-box;
   height: 100%;
@@ -64,15 +64,9 @@ const h = computed(() => props.height || 320)
 .md-preview {
   padding: 12px;
   overflow: auto;
-  background: #fafafa;
+  background: var(--el-fill-color-blank);
   font-size: 13px;
   line-height: 1.7;
-}
-.md-preview :deep(pre) {
-  background: #f0f2f5;
-  padding: 10px;
-  border-radius: 6px;
-  overflow-x: auto;
 }
 .md-preview :deep(h1),
 .md-preview :deep(h2),

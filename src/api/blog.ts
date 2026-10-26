@@ -203,6 +203,34 @@ export const applyAuthor = (reason?: string): Promise<string | number> =>
 export const getMyAuthorApply = (): Promise<AuthorApply | null> =>
   request({ url: '/blog/author/my', method: 'get' })
 
+/* ===== 博客主管理（暂停/解封/状态） ===== */
+
+/** 博客主暂停状态 */
+export interface BloggerStatus {
+  userId: string | number
+  /** 当前是否暂停中（已到期即 false） */
+  suspended: boolean
+  suspendUntil?: string | null
+  suspendReason?: string | null
+  handleUser?: string | null
+  updateTime?: string | null
+}
+
+/** 暂停至指定时间（suspendUntil 为空 = 永久） */
+export const suspendBlogger = (data: {
+  userId: string | number
+  suspendUntil?: string | null
+  reason?: string
+}): Promise<boolean> => request({ url: '/blog/blogger/suspend', method: 'post', data })
+
+/** 解除暂停（幂等） */
+export const releaseBlogger = (userId: string | number): Promise<boolean> =>
+  request({ url: '/blog/blogger/release', method: 'post', params: { userId } })
+
+/** 批量查询暂停状态（列表回填） */
+export const getBloggerStatuses = (userIds: (string | number)[]): Promise<BloggerStatus[]> =>
+  request({ url: '/blog/blogger/status', method: 'get', params: { userIds: userIds.join(',') } })
+
 /** 上传图片，返回 /blog/uploads/** 路径；展示时经 /api 前缀 */
 export function uploadImage(file: File): Promise<string> {
   const form = new FormData()

@@ -93,7 +93,7 @@ const loginForm = reactive({
   captchaCode: ''
 })
 
-const captchaEnabled = ref<boolean>(false)
+const captchaEnabled = ref<boolean>(LOGIN_CAPTCHA_SWITCH)
 const captchaId = ref<string>('')
 const captchaImage = ref<string>('')
 
@@ -127,7 +127,7 @@ const rules: FormRules = {
     {
       validator: (_rule, value, callback) => {
         if (!captchaEnabled.value) return callback()
-        if (!value) return callback(new Error('Please enter captcha'))
+        if (!value) return callback(new Error('请输入验证码'))
         callback()
       },
       trigger: 'blur'
@@ -141,7 +141,7 @@ onMounted(async () => {
     router.push('/')
     return
   }
-  if ((LOGIN_CAPTCHA_SWITCH === 'on')) {
+  if ((LOGIN_CAPTCHA_SWITCH)) {
     await refreshCaptcha()
   } else {
     captchaEnabled.value = false
@@ -149,6 +149,15 @@ onMounted(async () => {
 })
 
 const refreshCaptcha = async (): Promise<void> => {
+  // 前端开关是展示层唯一依据：VITE_LOGIN_CAPTCHA=false 时不请求、不展示，
+  // 防止后端 cloudwaer.captcha.enabled=true 把开关强行盖回来
+  if (!LOGIN_CAPTCHA_SWITCH) {
+    captchaEnabled.value = false
+    captchaId.value = ''
+    captchaImage.value = ''
+    loginForm.captchaCode = ''
+    return
+  }
   try {
     const resp = await getCaptcha()
     if (resp && resp.enabled) {

@@ -13,6 +13,10 @@ import {
   batchDownloadFiles,
   listOssConfig,
   saveOssConfig,
+  fetchPreviewBlob,
+  fetchPreviewText,
+  previewKind as resolvePreviewKind,
+  type FilePreviewKind,
   type SysFileInfo,
   type SysOssConfigInfo
 } from '@/api/file'
@@ -165,6 +169,49 @@ function formatSize(n?: number) {
   return `${(n / 1024 / 1024).toFixed(1)} MB`
 }
 
+// ===== 预览 =====
+const previewVisible = ref(false)
+const previewLoading = ref(false)
+const previewError = ref('')
+const previewFile = ref<SysFileInfo | null>(null)
+const previewKind = ref<FilePreviewKind>('text')
+/** 图片/PDF/视频的 Blob 地址（img/iframe 带不了 Token，必须走 blob） */
+const previewUrl = ref('')
+const previewText = ref('')
+
+function revokePreviewUrl() {
+  if (previewUrl.value) {
+    URL.revokeObjectURL(previewUrl.value)
+    previewUrl.value = ''
+  }
+}
+
+async function onPreview(row: SysFileInfo) {
+  previewFile.value = row
+  previewKind.value = resolvePreviewKind(row.fileName)
+  previewText.value = ''
+  previewError.value = ''
+  revokePreviewUrl()
+  previewVisible.value = true
+  previewLoading.value = true
+  try {
+    if (previewKind.value === 'text') {
+      previewText.value = await fetchPreviewText(row.id!)
+    } else {
+      previewUrl.value = URL.createObjectURL(await fetchPreviewBlob(row.id!))
+    }
+  } catch (e) {
+    previewError.value = e instanceof Error ? e.message : '预览失败'
+  } finally {
+    previewLoading.value = false
+  }
+}
+
+function closePreview() {
+  previewVisible.value = false
+  revokePreviewUrl()
+}
+
 onMounted(() => {
   fetchList()
   fetchOss()
@@ -231,8 +278,9 @@ onMounted(() => {
           <template #default="{ row }">{{ row.bizType || '—' }}</template>
         </el-table-column>
         <el-table-column prop="createTime" label="上传时间" width="170" align="center" />
-        <el-table-column label="操作" width="180" fixed="right" align="center">
+        <el-table-column label="操作" width="240" fixed="right" align="center">
           <template #default="{ row }">
+            <el-button link type="primary" @click="onPreview(row)">预览</el-button>
             <el-button link type="primary" @click="downloadOne(row)">下载</el-button>
             <el-button v-if="can('sys:file:delete')" link type="danger" @click="onDelete(row)">
               删除
@@ -279,6 +327,43 @@ onMounted(() => {
         </el-table-column>
       </el-table>
     </el-card>
+
+    <el-dialog
+      v-model="previewVisible"
+      :title="previewFile?.fileName || '文件预览'"
+      width="880px"
+      top="6vh"
+      @close="revokePreviewUrl"
+    >
+      <div v-loading="previewLoading" class="preview-box">
+        <template v-if="!previewLoading">
+          <p v-if="previewError" class="preview-error">{{ previewError }}，可下载后查看。</p>
+          <template v-else>
+            <img
+              v-if="previewKind === 'image' && previewUrl"
+              :src="previewUrl"
+              class="preview-image"
+              :alt="previewFile?.fileName"
+            />
+            <iframe
+              v-else-if="previewKind === 'pdf' && previewUrl"
+              :src="previewUrl"
+              class="preview-frame"
+              title="PDF 预览"
+            ></iframe>
+            <video v-else-if="previewKind === 'video' && previewUrl" :src="previewUrl" class="preview-video" controls></video>
+            <pre v-else class="preview-text">{{ previewText || '（无内容）' }}</pre>
+          </template>
+        </template>
+      </div>
+      <p class="preview-note">
+        文本/Office 为纯文本抽取预览（docx/xlsx/pptx 版式不可见）；HTML/SVG 按源码展示。
+      </p>
+      <template #footer>
+        <el-button @click="closePreview">关闭</el-button>
+        <el-button v-if="previewFile" type="primary" @click="downloadOne(previewFile)">下载</el-button>
+      </template>
+    </el-dialog>
 
     <el-dialog v-model="ossDialog" title="OSS 配置" width="520px">
       <el-form label-width="100px">
@@ -346,5 +431,56 @@ onMounted(() => {
 }
 .hidden-input {
   display: none;
+}
+.preview-box {
+  min-height: 200px;
+}
+.preview-image {
+  display: block;
+  max-width: 100%;
+  max-height: 65vh;
+  margin: 0 auto;
+  border-radius: 8px;
+}
+.preview-frame {
+  display: block;
+  width: 100%;
+  height: 65vh;
+  border: 1px solid var(--el-border-color);
+  border-radius: 8px;
+  background: var(--el-fill-color-blank);
+}
+.preview-video {
+  display: block;
+  width: 100%;
+  max-height: 65vh;
+  margin: 0 auto;
+  border-radius: 8px;
+  background: #000;
+}
+.preview-text {
+  margin: 0;
+  max-height: 65vh;
+  overflow: auto;
+  padding: 12px;
+  border: 1px solid var(--el-border-color);
+  border-radius: 8px;
+  background: var(--el-fill-color-light);
+  color: var(--el-text-color-primary);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.preview-error {
+  margin: 0;
+  color: var(--el-color-danger);
+  font-size: 13px;
+}
+.preview-note {
+  margin: 10px 0 0;
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
 }
 </style>

@@ -48,11 +48,38 @@
             <span v-if="!scope.row.roleIds || scope.row.roleIds.length === 0">-</span>
           </template>
         </el-table-column>
-        <el-table-column label="操作" align="center" width="250" fixed="right">
+        <el-table-column label="操作" align="center" width="340" fixed="right">
           <template #default="scope">
             <el-button v-if="canEdit" link type="primary" @click="handleEdit(scope.row)">编辑</el-button>
             <el-button v-if="canAssignRole" link type="success" @click="handleAssignRoles(scope.row)">分配角色</el-button>
             <el-button v-if="canDelete" link type="danger" @click="handleDelete(scope.row)">删除</el-button>
+            <!-- 博客主处置：与 blog 模块「博客主管理」共用后端 -->
+            <template v-if="isBloggerRow(scope.row)">
+              <el-button
+                v-if="checkPermission('blog:blogger:suspend') && !isSuspendedRow(scope.row)"
+                link
+                type="warning"
+                @click="openBloggerSuspend(scope.row)"
+              >
+                暂停
+              </el-button>
+              <el-button
+                v-else-if="checkPermission('blog:blogger:suspend') && isSuspendedRow(scope.row)"
+                link
+                type="success"
+                @click="handleBloggerRelease(scope.row)"
+              >
+                解封
+              </el-button>
+              <el-button
+                v-if="checkPermission('blog:blogger:revoke')"
+                link
+                type="warning"
+                @click="handleBloggerRevoke(scope.row)"
+              >
+                取消博客主
+              </el-button>
+            </template>
           </template>
         </el-table-column>
       </el-table>
@@ -163,18 +190,54 @@
         </span>
       </template>
     </el-dialog>
+    <!-- 博客主暂停 -->
+    <el-dialog
+      v-model="bloggerDialogVisible"
+      :title="`暂停博客主 · ${bloggerForm.username}`"
+      width="520px"
+    >
+      <el-form label-width="90px">
+        <el-form-item label="暂停至">
+          <el-date-picker
+            v-model="bloggerForm.until"
+            type="datetime"
+            value-format="YYYY-MM-DDTHH:mm"
+            placeholder="留空表示永久暂停"
+            style="width: 100%"
+          />
+        </el-form-item>
+        <el-form-item label="原因">
+          <el-input
+            v-model="bloggerForm.reason"
+            type="textarea"
+            :rows="3"
+            maxlength="200"
+            show-word-limit
+            placeholder="将提示给本人，如：违规内容整改"
+          />
+        </el-form-item>
+      </el-form>
+      <p class="blogger-tip">
+        暂停期间该用户无法发布/重新上线文章；到期自动恢复，无需手动解封。已发布内容不受影响。
+      </p>
+      <template #footer>
+        <el-button @click="bloggerDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="bloggerSaving" @click="confirmBloggerSuspend">确定暂停</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, reactive } from 'vue'
 import { ElMessageBox, FormInstance } from 'element-plus'
 import { message } from '@/api/request.ts'
 import { Plus, Search } from '@element-plus/icons-vue'
-import { getUserPage, saveUser, updateUser, deleteUser, assignRoles } from '@/api/user.ts'
+import { getUserPage, getUserById, saveUser, updateUser, deleteUser, assignRoles } from '@/api/user.ts'
 import { getRoleList } from '@/api/role.ts'
+import { suspendBlogger, releaseBlogger, getBloggerStatuses, type BloggerStatus } from '@/api/blog'
 import { useUserStore } from '@/stores/user'
-import { checkButtonPermission } from '@/utils/permission'
+import { checkButtonPermission, checkPermission } from '@/utils/permission'
 import { UserInfo, RoleInfo, PageResult } from '@/types'
 
 const userStore = useUserStore()
@@ -214,6 +277,125 @@ const canEdit = computed(() => checkButtonPermission('user', 'admin:user:edit'))
 const canDelete = computed(() => checkButtonPermission('user', 'admin:user:delete'))
 const canAssignRole = computed(() => checkButtonPermission('user', 'admin:user:assign-role'))
 
+// ===== 博客主处置（仅对含 BLOGGER 的行显示；与 blog 模块「博客主管理」共用同一套后端） =====
+const ADMIN_ROLE_ID = '1'
+const FALLBACK_BLOGGER_ROLE_ID = '4'
+const bloggerRoleId = ref(FALLBACK_BLOGGER_ROLE_ID)
+const bloggerStatuses = ref<Record<string, BloggerStatus>>({})
+const bloggerDialogVisible = ref(false)
+const bloggerSaving = ref(false)
+const bloggerForm = reactive({ userId: '', username: '', until: '', reason: '' })
+
+function resolveBloggerRoleId() {
+  const hit = roleOptions.value.find(
+    r => r.roleCode === 'BLOGGER' || r.roleName === 'BLOGGER' || (r.roleName || '').includes('博客')
+  )
+  bloggerRoleId.value = hit ? String(hit.id) : FALLBACK_BLOGGER_ROLE_ID
+}
+
+const isAdminRow = (row: UserInfo) => (row.roleIds || []).map(String).includes(ADMIN_ROLE_ID)
+
+const isBloggerRow = (row: UserInfo) =>
+  (row.roleIds || []).map(String).includes(bloggerRoleId.value) && !isAdminRow(row)
+
+const bloggerStatusOf = (row: UserInfo) => bloggerStatuses.value[String(row.id)]
+
+const isSuspendedRow = (row: UserInfo) => !!bloggerStatusOf(row)?.suspended
+
+async function fillBloggerStatuses() {
+  const ids = tableData.value
+    .filter(isBloggerRow)
+    .map(u => u.id)
+    .filter((id): id is string => !!id)
+  const next: Record<string, BloggerStatus> = {}
+  if (ids.length) {
+    try {
+      const list = await getBloggerStatuses(ids)
+      for (const s of list || []) next[String(s.userId)] = s
+    } catch {
+      /* 状态接口无权限时留空，列表仍可用 */
+    }
+  }
+  bloggerStatuses.value = next
+}
+
+function openBloggerSuspend(row: UserInfo) {
+  const s = bloggerStatusOf(row)
+  bloggerForm.userId = String(row.id)
+  bloggerForm.username = row.username
+  bloggerForm.until = s?.suspended && s.suspendUntil ? String(s.suspendUntil).slice(0, 16) : ''
+  bloggerForm.reason = s?.suspendReason || ''
+  bloggerDialogVisible.value = true
+}
+
+async function confirmBloggerSuspend() {
+  if (!bloggerForm.userId) return
+  if (bloggerForm.reason && bloggerForm.reason.length > 200) {
+    message.warning('原因最长 200 字')
+    return
+  }
+  bloggerSaving.value = true
+  try {
+    await suspendBlogger({
+      userId: bloggerForm.userId,
+      suspendUntil: bloggerForm.until ? bloggerForm.until : null,
+      reason: bloggerForm.reason || undefined
+    })
+    message.success(bloggerForm.until ? '已暂停至指定时间' : '已永久暂停，发布将被拦截')
+    bloggerDialogVisible.value = false
+    await loadUserList()
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '操作失败')
+  } finally {
+    bloggerSaving.value = false
+  }
+}
+
+async function handleBloggerRelease(row: UserInfo) {
+  try {
+    await ElMessageBox.confirm(
+      `解除「${row.username}」的暂停？解除后可立即重新发布文章。`,
+      '解除暂停',
+      { confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning' }
+    )
+  } catch {
+    return
+  }
+  try {
+    await releaseBlogger(String(row.id))
+    message.success('已解除暂停')
+    await loadUserList()
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '操作失败')
+  }
+}
+
+async function handleBloggerRevoke(row: UserInfo) {
+  try {
+    await ElMessageBox.confirm(
+      `取消「${row.username}」的博客主权限？其将无法再管理/发布文章（已发布内容保留）。`,
+      '取消博客主',
+      { confirmButtonText: '确定取消', cancelButtonText: '取消', type: 'warning' }
+    )
+  } catch {
+    return
+  }
+  try {
+    const user = await getUserById(String(row.id))
+    const roleIds = (user.roleIds || []).map(String)
+    const kept = roleIds.filter(id => id !== bloggerRoleId.value)
+    if (kept.length === roleIds.length) {
+      message.warning('该用户未持有博客主角色')
+      return
+    }
+    await assignRoles(String(row.id), kept)
+    message.success('已取消博客主权限，Token 权限已即时刷新')
+    await loadUserList()
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '操作失败')
+  }
+}
+
 const rules = {
   username: [
     { required: true, message: '请输入用户名', trigger: 'blur' }
@@ -242,6 +424,8 @@ const loadUserList = async () => {
       tableData.value = []
       pagination.value.total = 0
     }
+    // 回填本页博客主的暂停状态（不阻塞列表渲染）
+    void fillBloggerStatuses()
   } catch (error) {
     console.error('加载用户列表失败:', error)
     // 错误消息已在 request.ts 中统一处理
@@ -443,6 +627,7 @@ const handleAssignDialogClose = () => {
 onMounted(async () => {
   // 先加载角色列表，再加载用户列表，确保角色名称能正确显示
   await loadRoleList()
+  resolveBloggerRoleId()
   loadUserList()
 })
 </script>
@@ -462,6 +647,13 @@ onMounted(async () => {
   margin-top: 20px;
   display: flex;
   justify-content: flex-end;
+}
+
+.blogger-tip {
+  margin: 4px 0 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--el-text-color-secondary);
 }
 </style>
 

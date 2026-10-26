@@ -13,12 +13,18 @@ export function getUserList(): Promise<UserInfo[]> {
 
 /**
  * 分页查询用户列表
+ * @param roleId 角色筛选（可空；如 4=BLOGGER，只列博客主）
  */
-export function getUserPage(current: number, size: number, keyword?: string): Promise<PageResult<UserInfo>> {
+export function getUserPage(
+  current: number,
+  size: number,
+  keyword?: string,
+  roleId?: string | number
+): Promise<PageResult<UserInfo>> {
   return request({
     url: '/admin/user/page',
     method: 'get',
-    params: { current, size, keyword } as PageParams
+    params: { current, size, keyword, roleId } as PageParams
   })
 }
 

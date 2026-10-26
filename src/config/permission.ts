@@ -137,6 +137,22 @@ export const ButtonPermissionConfig: Record<string, PermissionConfig[]> = {
     }
   ],
 
+  // 博客主管理（暂停/解封/取消角色）
+  'blogBlogger': [
+    {
+      permissionCode: 'blog:blogger:view',
+      visible: true
+    },
+    {
+      permissionCode: 'blog:blogger:suspend',
+      visible: true
+    },
+    {
+      permissionCode: 'blog:blogger:revoke',
+      visible: true
+    }
+  ],
+
   // 微论坛话题
   'blogTopic': [
     {
