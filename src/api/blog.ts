@@ -63,6 +63,8 @@ export interface BlogArticle {
   authorId?: string | number
   authorName?: string
   publishStatus: number
+  /** 审核意见（拒绝原因） */
+  auditRemark?: string | null
   isTop: number
   isRecommend: number
   viewCount?: number
@@ -128,14 +130,22 @@ export const pageArticles = (params: ArticlePageParams): Promise<PageResult<Blog
 export const getArticleDetail = (id: string | number): Promise<BlogArticle> =>
   request({ url: '/blog/article/detail', method: 'get', params: { id } })
 
-export const saveArticle = (data: BlogArticle): Promise<boolean> =>
+export const saveArticle = (data: BlogArticle): Promise<number> =>
   request({ url: '/blog/article/save', method: 'post', data })
 
-export const updateArticle = (data: BlogArticle): Promise<boolean> =>
+export const updateArticle = (data: BlogArticle): Promise<number> =>
   request({ url: '/blog/article/update', method: 'put', data })
 
 export const deleteArticle = (id: string | number): Promise<boolean> =>
   request({ url: '/blog/article/delete', method: 'delete', params: { id } })
+
+/** 文章审核：1-通过（上线），2-拒绝（回草稿）；仅 ADMIN */
+export const auditArticle = (
+  id: string | number,
+  auditStatus: number,
+  remark?: string
+): Promise<boolean> =>
+  request({ url: '/blog/article/audit', method: 'post', data: { id, auditStatus, remark } })
 
 /** 文章导入解析结果 */
 export interface ArticleImportResult {
@@ -245,6 +255,8 @@ export interface BlogSiteSetting {
   favicon?: string
   /** 0-关闭，1-开启 */
   enableSearch?: number
+  /** 非管理员发布文章是否需审核：0-免审，1-需审核（缺省1） */
+  requireArticleAudit?: number
   /** default / compact / magazine */
   layout?: string
   footerText?: string

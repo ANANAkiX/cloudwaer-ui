@@ -54,9 +54,9 @@ onMounted(() => {
   if (route.query.categoryId) query.categoryId = String(route.query.categoryId)
 })
 
-const statusMap: Record<number, string> = { 0: '草稿', 1: '已发布', 2: '已下线' }
+const statusMap: Record<number, string> = { 0: '草稿', 1: '已发布', 2: '已下线', 3: '待审核' }
 const statusType = (s: number): 'info' | 'success' | 'warning' =>
-  s === 1 ? 'success' : s === 2 ? 'warning' : 'info'
+  s === 1 ? 'success' : s === 3 ? 'warning' : 'info'
 
 const pages = computed(() => Math.max(1, Math.ceil(total.value / query.size)))
 
@@ -246,6 +246,12 @@ function toCategoryId(val: string | number | null | undefined): string | null {
   return /^\d+$/.test(s) ? s : null
 }
 
+/** 按落库发布状态给保存反馈 */
+function messageForStatus(status: number | undefined, isUpdate: boolean) {
+  if (status === 3) return isUpdate ? '已更新，待审核' : '已创建，待审核'
+  return isUpdate ? '更新成功' : '创建成功'
+}
+
 const onSubmit = async () => {
   if (!form.title.trim() || !form.content.trim()) {
     message.warning('标题与正文不能为空')
@@ -271,13 +277,13 @@ const onSubmit = async () => {
       isRecommend: form.isRecommend,
       tagIds
     }
+    let savedStatus: number | undefined
     if (form.id) {
-      await updateArticle(payload)
-      message.success('更新成功')
+      savedStatus = await updateArticle(payload)
     } else {
-      await saveArticle(payload)
-      message.success('创建成功')
+      savedStatus = await saveArticle(payload)
     }
+    message.success(messageForStatus(savedStatus, Boolean(form.id)))
     dialogVisible.value = false
     await fetchPage()
   } catch (e) {
@@ -326,6 +332,7 @@ onMounted(async () => {
               </template>
             </el-input>
             <el-select v-model="query.publishStatus" placeholder="状态" clearable style="width: 120px">
+              <el-option label="待审核" :value="3" />
               <el-option label="草稿" :value="0" />
               <el-option label="已发布" :value="1" />
               <el-option label="已下线" :value="2" />
@@ -371,6 +378,9 @@ onMounted(async () => {
           <div class="body">
             <h3 class="title" :title="item.title">{{ item.title }}</h3>
             <p class="summary">{{ item.summary || '暂无摘要' }}</p>
+            <p v-if="item.auditRemark" class="audit-remark" :title="item.auditRemark">
+              审核意见：{{ item.auditRemark }}
+            </p>
             <div class="tags" v-if="item.tags?.length">
               <el-tag v-for="t in item.tags" :key="t.id" size="small" type="info">{{ t.name }}</el-tag>
             </div>
@@ -580,6 +590,16 @@ onMounted(async () => {
   -webkit-box-orient: vertical;
   overflow: hidden;
   min-height: 36px;
+}
+.audit-remark {
+  margin: 4px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--el-color-danger);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 .tags {
   display: flex;

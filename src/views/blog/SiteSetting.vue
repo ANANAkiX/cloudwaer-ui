@@ -23,6 +23,7 @@ const form = reactive<BlogSiteSetting>({
   siteDescription: '',
   favicon: '',
   enableSearch: 1,
+  requireArticleAudit: 1,
   layout: 'default',
   footerText: '',
   nav: [],
@@ -82,6 +83,7 @@ const fetchSetting = async () => {
       siteDescription: data.siteDescription ?? '',
       favicon: data.favicon ?? '',
       enableSearch: data.enableSearch ?? 1,
+      requireArticleAudit: data.requireArticleAudit ?? 1,
       layout: data.layout || 'default',
       footerText: data.footerText ?? '',
       nav: (data.nav && data.nav.length ? data.nav : defaultNav()).map((n, i) => ({
@@ -185,6 +187,7 @@ const onSave = async () => {
       siteDescription: form.siteDescription ?? '',
       favicon: form.favicon ?? '',
       enableSearch: form.enableSearch ? 1 : 0,
+      requireArticleAudit: form.requireArticleAudit ? 1 : 0,
       layout: form.layout || 'default',
       footerText: form.footerText ?? '',
       nav,
@@ -291,6 +294,17 @@ onMounted(fetchSetting)
                 inactive-text="关"
               />
               <span class="field-tip">控制前台是否显示搜索入口</span>
+            </el-form-item>
+
+            <el-form-item label="发布审核">
+              <el-switch
+                v-model="form.requireArticleAudit"
+                :active-value="1"
+                :inactive-value="0"
+                active-text="开"
+                inactive-text="关"
+              />
+              <span class="field-tip">开启后，非管理员发布的文章需在「审核中心」通过后才对外可见</span>
             </el-form-item>
 
             <el-form-item label="页脚文案">

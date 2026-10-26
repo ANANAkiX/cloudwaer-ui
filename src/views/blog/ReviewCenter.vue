@@ -4,20 +4,107 @@ import {
   pageComments,
   auditComment,
   deleteComment,
-  type BlogComment
+  pageArticles,
+  auditArticle,
+  type BlogComment,
+  type BlogArticle
 } from '@/api/blog'
 import { message } from '@/api/request.ts'
 import { ElMessageBox } from 'element-plus'
 import { Search, Refresh } from '@element-plus/icons-vue'
 import { checkButtonPermission } from '@/utils/permission'
 
-const loading = ref(false)
-const tableData = ref<BlogComment[]>([])
-const total = ref(0)
-
 const can = (code: string) => checkButtonPermission('blogComment', code)
 
-const query = reactive({
+/** 待办类型：文章发布审核 / 评论审核 */
+const tab = ref<'article' | 'comment'>('article')
+
+// ===== 文章审核 =====
+const articleLoading = ref(false)
+const articles = ref<BlogArticle[]>([])
+const articleTotal = ref(0)
+const articleQuery = reactive({
+  current: 1,
+  size: 20,
+  keyword: '',
+  publishStatus: 3 as number | undefined
+})
+
+const publishStatusMap: Record<number, string> = {
+  0: '草稿',
+  1: '已发布',
+  2: '已下线',
+  3: '待审核'
+}
+const publishStatusType = (
+  s: number
+): 'warning' | 'success' | 'info' | 'danger' =>
+  s === 3 ? 'warning' : s === 1 ? 'success' : s === 0 ? 'info' : 'info'
+
+const fetchArticles = async () => {
+  articleLoading.value = true
+  try {
+    const res = await pageArticles({
+      current: articleQuery.current,
+      size: articleQuery.size,
+      keyword: articleQuery.keyword || undefined,
+      publishStatus: articleQuery.publishStatus
+    })
+    articles.value = res.records || []
+    articleTotal.value = Number(res.total || 0)
+  } finally {
+    articleLoading.value = false
+  }
+}
+
+const onArticleSearch = () => {
+  articleQuery.current = 1
+  fetchArticles()
+}
+
+const onArticleReset = () => {
+  articleQuery.keyword = ''
+  articleQuery.publishStatus = 3
+  onArticleSearch()
+}
+
+const onAuditArticle = async (row: BlogArticle, auditStatus: number) => {
+  if (auditStatus === 2) {
+    let remark = ''
+    try {
+      const res = await ElMessageBox.prompt('拒绝原因（将反馈给作者，可留空）', '拒绝文章', {
+        confirmButtonText: '确定拒绝',
+        cancelButtonText: '取消',
+        inputPlaceholder: '如：正文含广告链接，请修改后重新发布',
+        inputValidator: (v: string) => (v || '').length <= 200 || '最多200字'
+      })
+      remark = res.value || ''
+    } catch {
+      return
+    }
+    await auditArticle(String(row.id), 2, remark || undefined)
+    message.success('已拒绝，文章退回作者草稿')
+  } else {
+    try {
+      await ElMessageBox.confirm('通过后该文章将立即对前台可见，确定通过吗？', '通过文章', {
+        confirmButtonText: '确定通过',
+        cancelButtonText: '取消',
+        type: 'warning'
+      })
+    } catch {
+      return
+    }
+    await auditArticle(String(row.id), 1)
+    message.success('已通过，文章已上线')
+  }
+  await fetchArticles()
+}
+
+// ===== 评论审核 =====
+const commentLoading = ref(false)
+const comments = ref<BlogComment[]>([])
+const commentTotal = ref(0)
+const commentQuery = reactive({
   current: 1,
   size: 20,
   keyword: '',
@@ -33,34 +120,34 @@ const formatDate = (val?: string | null) => {
   return String(val).replace('T', ' ').slice(0, 16)
 }
 
-const fetchPage = async () => {
-  loading.value = true
+const fetchComments = async () => {
+  commentLoading.value = true
   try {
     const res = await pageComments({
-      current: query.current,
-      size: query.size,
-      keyword: query.keyword || undefined,
-      auditStatus: query.auditStatus
+      current: commentQuery.current,
+      size: commentQuery.size,
+      keyword: commentQuery.keyword || undefined,
+      auditStatus: commentQuery.auditStatus
     })
-    tableData.value = res.records || []
-    total.value = Number(res.total || 0)
+    comments.value = res.records || []
+    commentTotal.value = Number(res.total || 0)
   } finally {
-    loading.value = false
+    commentLoading.value = false
   }
 }
 
-const onSearch = () => {
-  query.current = 1
-  fetchPage()
+const onCommentSearch = () => {
+  commentQuery.current = 1
+  fetchComments()
 }
 
-const onReset = () => {
-  query.keyword = ''
-  query.auditStatus = undefined
-  onSearch()
+const onCommentReset = () => {
+  commentQuery.keyword = ''
+  commentQuery.auditStatus = undefined
+  onCommentSearch()
 }
 
-const onAudit = async (row: BlogComment, auditStatus: number) => {
+const onAuditComment = async (row: BlogComment, auditStatus: number) => {
   const action = auditStatus === 1 ? '通过' : '拒绝'
   try {
     await ElMessageBox.confirm(`确定${action}该评论吗？`, '审核', {
@@ -73,10 +160,10 @@ const onAudit = async (row: BlogComment, auditStatus: number) => {
   }
   await auditComment(String(row.id), auditStatus)
   message.success(`已${action}`)
-  await fetchPage()
+  await fetchComments()
 }
 
-const onDelete = async (row: BlogComment) => {
+const onDeleteComment = async (row: BlogComment) => {
   try {
     await ElMessageBox.confirm('删除该评论及其楼中楼？', '删除', {
       confirmButtonText: '确定',
@@ -88,10 +175,21 @@ const onDelete = async (row: BlogComment) => {
   }
   await deleteComment(String(row.id))
   message.success('已删除')
-  await fetchPage()
+  await fetchComments()
 }
 
-onMounted(fetchPage)
+const onTabChange = (name: string | number) => {
+  if (name === 'article') {
+    fetchArticles()
+  } else {
+    fetchComments()
+  }
+}
+
+onMounted(() => {
+  fetchArticles()
+  fetchComments()
+})
 </script>
 
 <template>
@@ -99,31 +197,105 @@ onMounted(fetchPage)
     <el-card>
       <template #header>
         <div class="card-header">
-          <span>审核中心 · 评论</span>
-          <div class="card-actions">
+          <div class="header-left">
+            <span>审核中心</span>
+            <el-radio-group v-model="tab" size="small" @change="onTabChange">
+              <el-radio-button value="article">文章发布</el-radio-button>
+              <el-radio-button value="comment">评论</el-radio-button>
+            </el-radio-group>
+          </div>
+
+          <!-- 文章工具条 -->
+          <div v-if="tab === 'article'" class="card-actions">
             <el-input
-              v-model="query.keyword"
-              placeholder="搜索内容/文章"
+              v-model="articleQuery.keyword"
+              placeholder="搜索标题"
               clearable
               style="width: 200px"
-              @keyup.enter="onSearch"
+              @keyup.enter="onArticleSearch"
             >
               <template #prefix>
                 <el-icon><Search /></el-icon>
               </template>
             </el-input>
-            <el-select v-model="query.auditStatus" placeholder="状态" clearable style="width: 120px">
+            <el-select
+              v-model="articleQuery.publishStatus"
+              placeholder="状态"
+              clearable
+              style="width: 120px"
+            >
+              <el-option label="待审核" :value="3" />
+              <el-option label="草稿" :value="0" />
+              <el-option label="已发布" :value="1" />
+              <el-option label="已下线" :value="2" />
+            </el-select>
+            <el-button type="primary" :icon="Search" @click="onArticleSearch">查询</el-button>
+            <el-button :icon="Refresh" @click="onArticleReset">重置</el-button>
+          </div>
+
+          <!-- 评论工具条 -->
+          <div v-else class="card-actions">
+            <el-input
+              v-model="commentQuery.keyword"
+              placeholder="搜索内容/文章"
+              clearable
+              style="width: 200px"
+              @keyup.enter="onCommentSearch"
+            >
+              <template #prefix>
+                <el-icon><Search /></el-icon>
+              </template>
+            </el-input>
+            <el-select
+              v-model="commentQuery.auditStatus"
+              placeholder="状态"
+              clearable
+              style="width: 120px"
+            >
               <el-option label="待审核" :value="0" />
               <el-option label="已通过" :value="1" />
               <el-option label="已拒绝" :value="2" />
             </el-select>
-            <el-button type="primary" :icon="Search" @click="onSearch">查询</el-button>
-            <el-button :icon="Refresh" @click="onReset">重置</el-button>
+            <el-button type="primary" :icon="Search" @click="onCommentSearch">查询</el-button>
+            <el-button :icon="Refresh" @click="onCommentReset">重置</el-button>
           </div>
         </div>
       </template>
 
-      <el-table v-loading="loading" :data="tableData" border style="width: 100%">
+      <!-- 文章审核表 -->
+      <el-table v-if="tab === 'article'" v-loading="articleLoading" :data="articles" border style="width: 100%">
+        <el-table-column prop="title" label="标题" min-width="200" align="center" show-overflow-tooltip />
+        <el-table-column prop="authorName" label="作者" width="120" align="center" />
+        <el-table-column prop="summary" label="摘要" min-width="160" align="center" show-overflow-tooltip />
+        <el-table-column label="状态" width="100" align="center">
+          <template #default="{ row }">
+            <el-tag :type="publishStatusType(Number(row.publishStatus))" size="small">
+              {{ publishStatusMap[row.publishStatus] || row.publishStatus }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="审核意见" min-width="150" align="center" show-overflow-tooltip>
+          <template #default="{ row }">
+            <span v-if="row.auditRemark" class="remark">{{ row.auditRemark }}</span>
+            <span v-else class="dim">—</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="提交时间" width="160" align="center">
+          <template #default="{ row }">{{ formatDate(row.createTime) }}</template>
+        </el-table-column>
+        <el-table-column label="操作" width="150" fixed="right" align="center">
+          <template #default="{ row }">
+            <template v-if="Number(row.publishStatus) === 3">
+              <el-button link type="success" @click="onAuditArticle(row, 1)">通过</el-button>
+              <el-button link type="warning" @click="onAuditArticle(row, 2)">拒绝</el-button>
+            </template>
+            <span v-else class="dim">—</span>
+          </template>
+        </el-table-column>
+      </el-table>
+
+      <!-- 评论审核表 -->
+      <el-table v-else v-loading="commentLoading" :data="comments" border style="width: 100%">
         <el-table-column prop="articleTitle" label="文章" min-width="140" align="center" show-overflow-tooltip />
         <el-table-column prop="nickname" label="评论者" width="110" align="center" />
         <el-table-column prop="content" label="内容" min-width="200" align="center" show-overflow-tooltip />
@@ -146,28 +318,32 @@ onMounted(fetchPage)
         <el-table-column label="操作" width="180" fixed="right" align="center">
           <template #default="{ row }">
             <template v-if="row.auditStatus === 0">
-              <el-button link type="success" @click="onAudit(row, 1)">
-                通过
-              </el-button>
-              <el-button link type="warning" @click="onAudit(row, 2)">
-                拒绝
-              </el-button>
+              <el-button link type="success" @click="onAuditComment(row, 1)">通过</el-button>
+              <el-button link type="warning" @click="onAuditComment(row, 2)">拒绝</el-button>
             </template>
-            <el-button link type="danger" @click="onDelete(row)">
-              删除
-            </el-button>
+            <el-button link type="danger" @click="onDeleteComment(row)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
 
       <div class="pagination-container">
         <el-pagination
-          v-model:current-page="query.current"
-          v-model:page-size="query.size"
-          :total="total"
+          v-if="tab === 'article'"
+          v-model:current-page="articleQuery.current"
+          v-model:page-size="articleQuery.size"
+          :total="articleTotal"
           :page-sizes="[20, 50]"
           layout="total, sizes, prev, pager, next, jumper"
-          @change="fetchPage"
+          @change="fetchArticles"
+        />
+        <el-pagination
+          v-else
+          v-model:current-page="commentQuery.current"
+          v-model:page-size="commentQuery.size"
+          :total="commentTotal"
+          :page-sizes="[20, 50]"
+          layout="total, sizes, prev, pager, next, jumper"
+          @change="fetchComments"
         />
       </div>
     </el-card>
@@ -185,6 +361,11 @@ onMounted(fetchPage)
   flex-wrap: wrap;
   gap: 10px;
 }
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
 .card-actions {
   display: flex;
   gap: 10px;
@@ -195,5 +376,11 @@ onMounted(fetchPage)
   margin-top: 16px;
   display: flex;
   justify-content: center;
+}
+.remark {
+  color: var(--el-color-danger);
+}
+.dim {
+  color: var(--el-text-color-placeholder);
 }
 </style>
