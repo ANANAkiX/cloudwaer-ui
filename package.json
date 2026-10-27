@@ -43,5 +43,6 @@
     "vite": "^5.0.8",
     "vue-tsc": "^2.2.12",
     "vuedraggable": "4.1.0"
-  }
+  },
+  "license": "MIT"
 }
