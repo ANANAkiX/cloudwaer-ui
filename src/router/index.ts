@@ -17,6 +17,13 @@ const STATIC_ROUTES: RouteRecordRaw[] = [
     component: () => import('@/views/Login.vue'),
     meta: { requiresAuth: false }
   },
+
+  {
+    path: '/wiki/s/:token',
+    name: 'WikiShareView',
+    component: () => import('@/views/wiki/ShareView.vue'),
+    meta: { requiresAuth: false, title: '知识分享' }
+  },
   {
     path: '/',
     name: 'MainLayout',

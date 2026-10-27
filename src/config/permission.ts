@@ -137,6 +137,40 @@ export const ButtonPermissionConfig: Record<string, PermissionConfig[]> = {
     }
   ],
 
+  // 知识库
+  'wikiSpace': [
+    {
+      permissionCode: 'wiki:space:add',
+      visible: true
+    },
+    {
+      permissionCode: 'wiki:space:edit',
+      visible: true
+    },
+    {
+      permissionCode: 'wiki:space:delete',
+      visible: true
+    }
+  ],
+  'wikiDoc': [
+    {
+      permissionCode: 'wiki:doc:add',
+      visible: true
+    },
+    {
+      permissionCode: 'wiki:doc:edit',
+      visible: true
+    },
+    {
+      permissionCode: 'wiki:doc:delete',
+      visible: true
+    },
+    {
+      permissionCode: 'wiki:share:add',
+      visible: true
+    }
+  ],
+
   // 博客主管理（暂停/解封/取消角色）
   'blogBlogger': [
     {
