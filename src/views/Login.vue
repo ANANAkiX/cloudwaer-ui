@@ -91,6 +91,7 @@ import {message} from '@/api/request.ts'
 import {getCaptcha} from '@/api/captcha'
 import {getPublicSettings, type PublicSettings} from '@/api/auth.ts'
 import {LOGIN_CAPTCHA_FORCE_OFF, LOGIN_CAPTCHA_FORCE_ON} from '@/config/app'
+import {rsaEncryptWithPublicKey} from '@/utils/rsa.ts'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -110,6 +111,7 @@ const captchaEnabled = ref<boolean>(false)
 const captchaId = ref<string>('')
 const captchaImage = ref<string>('')
 const oauthProviders = ref<PublicSettings['oauthProviders']>([])
+const passwordTransport = ref<PublicSettings['passwordTransport']>({enabled: false})
 
 const rules: FormRules = {
   username: [
@@ -163,6 +165,7 @@ onMounted(async () => {
   try {
     const pub = await getPublicSettings()
     oauthProviders.value = pub?.oauthProviders || []
+    passwordTransport.value = pub?.passwordTransport || {enabled: false}
     captchaEnabled.value = LOGIN_CAPTCHA_FORCE_ON ? true : !!pub?.captchaEnabled
   } catch (e) {
     // 公开设置拉取失败：退回 env 强制开关，不阻塞登录
@@ -175,6 +178,24 @@ onMounted(async () => {
 
 const handleOauthLogin = (provider: { type: string; name: string }): void => {
   message.info(`第三方登录（${provider.name}）暂未开放`)
+}
+
+/**
+ * 密码传输加密启用时用公钥 RSA 加密（未启用原样返回；启用但缺公钥时拦截，不发明文）
+ */
+const encryptPassword = (password: string): string => {
+  const pt = passwordTransport.value
+  if (!pt?.enabled) return password
+  if (!pt.publicKey) {
+    message.error('服务器密码加密配置不完整（缺少公钥），请联系管理员在「服务器设置」生成密钥对并发布')
+    throw new Error('password transport public key missing')
+  }
+  try {
+    return rsaEncryptWithPublicKey(password, pt.publicKey)
+  } catch (e) {
+    message.error('密码加密失败，请刷新页面后重试')
+    throw e
+  }
 }
 
 const refreshCaptcha = async (): Promise<void> => {
@@ -209,7 +230,7 @@ const handleLogin = async (): Promise<void> => {
         const payload = {
           username: loginMode.value === 'username' ? loginForm.username : undefined,
           email: loginMode.value === 'email' ? loginForm.email : undefined,
-          password: loginForm.password,
+          password: encryptPassword(loginForm.password),
           loginType: loginMode.value === 'email' ? 'EMAIL_PASSWORD' : 'ACCESS_PASSWORD',
           scope: 'DEFAULT',
           clientId: 'admin'

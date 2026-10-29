@@ -25,6 +25,7 @@ export interface PublishResult {
     success: boolean
     keyCount: number
     publishTime?: string
+    warnings?: string[]
 }
 
 /**
@@ -85,6 +86,16 @@ export function resetSettings(keys: string[]): Promise<boolean> {
 export function publishSettings(): Promise<PublishResult> {
     return request({
         url: '/admin/setting/publish',
+        method: 'post'
+    })
+}
+
+/**
+ * 生成登录密码加密的 RSA 密钥对（写入草稿，发布后生效）
+ */
+export function generatePasswordTransportKeys(): Promise<{ publicKey: string; hint: string }> {
+    return request({
+        url: '/admin/setting/password-transport/generate-keys',
         method: 'post'
     })
 }

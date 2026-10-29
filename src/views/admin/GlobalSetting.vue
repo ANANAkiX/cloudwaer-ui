@@ -20,6 +20,10 @@
 
       <el-tabs v-model="activeTab">
         <el-tab-pane v-for="tab in settingTabs" :key="tab.name" :label="tab.label" :name="tab.name">
+          <div v-if="tab.name === 'security' && canSave" class="tab-toolbar">
+            <el-button @click="handleGenerateKeys">生成 RSA 密钥对</el-button>
+            <el-tag type="info" size="small">用于登录密码传输加密；生成后开启开关并「发布设置」生效</el-tag>
+          </div>
           <div class="setting-list">
             <div v-for="item in tab.items" :key="item.settingKey" class="setting-row">
               <div class="setting-label">
@@ -38,6 +42,9 @@
                                      @update:model-value="(v: number | undefined) => setNum(item, v)" />
                     <el-input v-else :model-value="strOf(item)" style="width: 220px"
                               :disabled="item.implemented === false"
+                              :type="item.valueType === 'SECRET' ? 'password' : 'text'"
+                              :show-password="item.valueType === 'SECRET'"
+                              placeholder="留空表示未覆盖"
                               @update:model-value="(v: string) => setStr(item, v)" />
                   </div>
                 </el-tooltip>
@@ -136,6 +143,7 @@
 import {computed, onMounted, reactive, ref} from 'vue'
 import {
   deleteOauthProvider,
+  generatePasswordTransportKeys,
   getOauthProviders,
   getSettings,
   publishSettings,
@@ -147,6 +155,7 @@ import {
 } from '@/api/setting.ts'
 import {message} from '@/api/request.ts'
 import {checkButtonPermission} from '@/utils/permission.ts'
+import {ElMessageBox} from 'element-plus'
 
 const loading = ref<boolean>(false)
 const saving = ref<boolean>(false)
@@ -261,6 +270,9 @@ const handlePublish = async (): Promise<void> => {
   try {
     const result = await publishSettings()
     message.success(`发布成功：${result?.keyCount ?? 0} 项已广播到各实例`)
+    for (const w of result?.warnings || []) {
+      message.warning(w, {duration: 8000})
+    }
     await load()
   } finally {
     publishing.value = false
@@ -271,6 +283,22 @@ const handleReset = async (item: SettingItem): Promise<void> => {
   await resetSettings([item.settingKey])
   message.success(`已恢复默认（草稿）：${item.settingKey}；发布后生效`)
   await load()
+}
+
+const handleGenerateKeys = async (): Promise<void> => {
+  try {
+    await ElMessageBox.confirm('将生成新的 RSA 密钥对并覆盖当前密钥（保存为草稿）；发布后登录密码按新公钥加密。继续？',
+      '生成密钥对', {type: 'warning', confirmButtonText: '生成', cancelButtonText: '取消'})
+  } catch {
+    return
+  }
+  try {
+    const result = await generatePasswordTransportKeys()
+    message.success(result?.hint || '密钥对已生成（草稿），发布后生效')
+    await load()
+  } catch (e) {
+    console.error('生成密钥对失败', e)
+  }
 }
 
 // ---- 第三方登录 ----
@@ -400,6 +428,13 @@ onMounted(load)
 }
 
 .oauth-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.tab-toolbar {
   display: flex;
   align-items: center;
   gap: 12px;

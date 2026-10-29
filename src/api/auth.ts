@@ -57,6 +57,7 @@ export interface PublicSettings {
     captchaExpireSeconds: number
     registerEnabled: boolean
     oauthProviders: { type: string; name: string; icon?: string }[]
+    passwordTransport: { enabled: boolean; publicKey?: string }
 }
 
 /**
