@@ -1,12 +1,15 @@
 // Frontend feature switches loaded from Vite env
 // 登录页是否启用图形验证码开关（从 Vite 环境变量读取）
-// VITE_LOGIN_CAPTCHA: true / false（不配置、'false'、'0'、'off' 均视为关闭）
+// VITE_LOGIN_CAPTCHA 三态：显式 true 强制开启；显式 false/'0'/'off' 强制关闭（逃生门）；
+// 未配置时跟随后端全局动态设置（/auth/public-settings 的 captchaEnabled，可后台发布热切换）
 // 注意：修改 .env 后需重启 dev server 才生效（Vite 只在启动时读取 env）
 const rawLoginCaptcha = String((import.meta as any).env?.VITE_LOGIN_CAPTCHA ?? '')
     .trim()
     .toLowerCase()
 
-export const LOGIN_CAPTCHA_SWITCH = ['true', '1', 'on', 'yes'].includes(rawLoginCaptcha)
+export const LOGIN_CAPTCHA_FORCE_OFF = ['false', '0', 'off', 'no'].includes(rawLoginCaptcha)
+
+export const LOGIN_CAPTCHA_FORCE_ON = ['true', '1', 'on', 'yes'].includes(rawLoginCaptcha)
 
 export const createDefaultDbConnectionForm = () => ({
     // 连接名称（用于列表展示/区分不同连接）

@@ -301,6 +301,30 @@ export const ButtonPermissionConfig: Record<string, PermissionConfig[]> = {
       visible: true
     }
   ],
+
+  // 服务器设置（全局动态设置）
+  'globalsetting': [
+    {
+      permissionCode: 'admin:setting:save',
+      visible: true
+    },
+    {
+      permissionCode: 'admin:setting:publish',
+      visible: true
+    },
+    {
+      permissionCode: 'admin:setting:reset',
+      visible: true
+    },
+    {
+      permissionCode: 'admin:oauth:save',
+      visible: true
+    },
+    {
+      permissionCode: 'admin:oauth:delete',
+      visible: true
+    }
+  ],
 }
 
 /**

@@ -65,6 +65,18 @@
             登录
           </el-button>
         </el-form-item>
+        <el-form-item v-if="oauthProviders.length">
+          <div class="oauth-row">
+            <el-button
+                v-for="p in oauthProviders"
+                :key="p.type"
+                class="oauth-button"
+                @click="handleOauthLogin(p)"
+            >
+              {{ p.name }}
+            </el-button>
+          </div>
+        </el-form-item>
       </el-form>
     </div>
   </div>
@@ -77,7 +89,8 @@ import {useUserStore} from '@/stores/user'
 import {FormInstance, FormRules} from 'element-plus'
 import {message} from '@/api/request.ts'
 import {getCaptcha} from '@/api/captcha'
-import {LOGIN_CAPTCHA_SWITCH} from '@/config/app'
+import {getPublicSettings, type PublicSettings} from '@/api/auth.ts'
+import {LOGIN_CAPTCHA_FORCE_OFF, LOGIN_CAPTCHA_FORCE_ON} from '@/config/app'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -93,9 +106,10 @@ const loginForm = reactive({
   captchaCode: ''
 })
 
-const captchaEnabled = ref<boolean>(LOGIN_CAPTCHA_SWITCH)
+const captchaEnabled = ref<boolean>(false)
 const captchaId = ref<string>('')
 const captchaImage = ref<string>('')
+const oauthProviders = ref<PublicSettings['oauthProviders']>([])
 
 const rules: FormRules = {
   username: [
@@ -141,23 +155,29 @@ onMounted(async () => {
     router.push('/')
     return
   }
-  if ((LOGIN_CAPTCHA_SWITCH)) {
-    await refreshCaptcha()
-  } else {
+  // VITE_LOGIN_CAPTCHA=false 为强制关闭逃生门；未配置时跟随后端全局动态设置（发布即热生效）
+  if (LOGIN_CAPTCHA_FORCE_OFF) {
     captchaEnabled.value = false
+    return
+  }
+  try {
+    const pub = await getPublicSettings()
+    oauthProviders.value = pub?.oauthProviders || []
+    captchaEnabled.value = LOGIN_CAPTCHA_FORCE_ON ? true : !!pub?.captchaEnabled
+  } catch (e) {
+    // 公开设置拉取失败：退回 env 强制开关，不阻塞登录
+    captchaEnabled.value = LOGIN_CAPTCHA_FORCE_ON
+  }
+  if (captchaEnabled.value) {
+    await refreshCaptcha()
   }
 })
 
+const handleOauthLogin = (provider: { type: string; name: string }): void => {
+  message.info(`第三方登录（${provider.name}）暂未开放`)
+}
+
 const refreshCaptcha = async (): Promise<void> => {
-  // 前端开关是展示层唯一依据：VITE_LOGIN_CAPTCHA=false 时不请求、不展示，
-  // 防止后端 cloudwaer.captcha.enabled=true 把开关强行盖回来
-  if (!LOGIN_CAPTCHA_SWITCH) {
-    captchaEnabled.value = false
-    captchaId.value = ''
-    captchaImage.value = ''
-    loginForm.captchaCode = ''
-    return
-  }
   try {
     const resp = await getCaptcha()
     if (resp && resp.enabled) {
@@ -270,5 +290,15 @@ const handleLogin = async (): Promise<void> => {
 
 .captcha-refresh {
   white-space: nowrap;
+}
+
+.oauth-row {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+}
+
+.oauth-button {
+  flex: 1;
 }
 </style>

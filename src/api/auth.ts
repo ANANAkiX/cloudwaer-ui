@@ -48,3 +48,23 @@ export function logout(): Promise<void> {
         method: 'post'
     })
 }
+
+/**
+ * 匿名公开设置（登录页用）
+ */
+export interface PublicSettings {
+    captchaEnabled: boolean
+    captchaExpireSeconds: number
+    registerEnabled: boolean
+    oauthProviders: { type: string; name: string; icon?: string }[]
+}
+
+/**
+ * 获取公开设置（验证码开关、注册开关、第三方登录入口）
+ */
+export function getPublicSettings(): Promise<PublicSettings> {
+    return request({
+        url: '/auth/public-settings',
+        method: 'get'
+    })
+}
