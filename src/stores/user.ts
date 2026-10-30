@@ -17,6 +17,10 @@ export const useUserStore = defineStore('user', {
         permissionCodes: JSON.parse(localStorage.getItem('permissionCodes') || '[]') // 存储权限代码
     }),
     actions: {
+        setToken(token: string): void {
+            this.token = token
+            localStorage.setItem('token', this.token)
+        },
         async login(payload: LoginRequestDTO, captcha?: CaptchaPayload): Promise<{
             success: boolean;
             message?: string
@@ -26,8 +30,7 @@ export const useUserStore = defineStore('user', {
                 const res = await apiLogin(payload, captcha)
                 // 后端只返回 token
                 if (res && res.token) {
-                    this.token = res.token
-                    localStorage.setItem('token', this.token)
+                    this.setToken(res.token)
                     return {success: true}
                 } else {
                     return {success: false, message: '登录失败，返回数据格式错误'}

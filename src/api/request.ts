@@ -7,7 +7,7 @@ import {disconnectWs} from '@/utils/ws.ts'
 
 const request = axios.create({
     baseURL: '/api',
-    timeout: 10000
+    timeout: 60000
 })
 
 // 用于防止重复显示错误消息

@@ -94,3 +94,74 @@ export function getCurrentUser(): Promise<UserInfo> {
   })
 }
 
+/** 当前用户个人信息 */
+export interface UserProfile {
+  id: string | number
+  username: string
+  nickname?: string
+  email?: string
+  phone?: string
+  avatar?: string
+}
+
+/** 修改密码请求 */
+export interface ChangePasswordPayload {
+  oldPassword: string
+  newPassword: string
+}
+
+/** 头像上传结果 */
+export interface AvatarUploadResult {
+  id: string | number
+  fileName: string
+  accessUrl: string
+}
+
+/**
+ * 获取当前用户个人信息
+ */
+export function getMyProfile(): Promise<UserProfile> {
+  return request({
+    url: '/admin/user/profile',
+    method: 'get'
+  })
+}
+
+/**
+ * 修改当前用户个人信息（只传需变更字段）
+ */
+export function updateMyProfile(
+  data: Partial<Pick<UserProfile, 'nickname' | 'email' | 'phone' | 'avatar'>>
+): Promise<boolean> {
+  return request({
+    url: '/admin/user/profile',
+    method: 'put',
+    data
+  })
+}
+
+/**
+ * 修改当前用户密码
+ */
+export function changeMyPassword(data: ChangePasswordPayload): Promise<boolean> {
+  return request({
+    url: '/admin/user/profile/password',
+    method: 'put',
+    data
+  })
+}
+
+/**
+ * 上传当前用户头像
+ */
+export function uploadMyAvatar(file: File): Promise<AvatarUploadResult> {
+  const form = new FormData()
+  form.append('file', file)
+  form.append('bizType', 'avatar')
+  return request({
+    url: '/admin/file/my/upload',
+    method: 'post',
+    data: form
+  })
+}
+

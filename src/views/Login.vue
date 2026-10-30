@@ -78,6 +78,10 @@
           </div>
         </el-form-item>
       </el-form>
+      <div class="register-entry">
+        <span class="register-entry-text">还没有账号？</span>
+        <el-link type="primary" :underline="false" @click="router.push('/register')">去注册</el-link>
+      </div>
     </div>
   </div>
 </template>
@@ -89,7 +93,7 @@ import {useUserStore} from '@/stores/user'
 import {FormInstance, FormRules} from 'element-plus'
 import {message} from '@/api/request.ts'
 import {getCaptcha} from '@/api/captcha'
-import {getPublicSettings, type PublicSettings} from '@/api/auth.ts'
+import {getPublicSettings, getOauthAuthorizeUrl, type PublicSettings} from '@/api/auth.ts'
 import {LOGIN_CAPTCHA_FORCE_OFF, LOGIN_CAPTCHA_FORCE_ON} from '@/config/app'
 import {rsaEncryptWithPublicKey} from '@/utils/rsa.ts'
 
@@ -176,8 +180,21 @@ onMounted(async () => {
   }
 })
 
-const handleOauthLogin = (provider: { type: string; name: string }): void => {
-  message.info(`第三方登录（${provider.name}）暂未开放`)
+const handleOauthLogin = async (provider: { type: string; name: string }): Promise<void> => {
+  try {
+    const returnTo = `${window.location.origin}/login/oauth-callback`
+    const data = await getOauthAuthorizeUrl(provider.type, 'admin', returnTo)
+    if (!data?.url) {
+      message.error(`第三方登录（${provider.name}）授权地址获取失败`)
+      return
+    }
+    sessionStorage.setItem('oauth_provider', provider.type)
+    sessionStorage.setItem('oauth_state', data.state || '')
+    sessionStorage.setItem('oauth_intent', 'login')
+    window.location.href = data.url
+  } catch (e: any) {
+    message.error(e?.message || `第三方登录（${provider.name}）发起失败，请稍后重试`)
+  }
 }
 
 /**
@@ -321,5 +338,15 @@ const handleLogin = async (): Promise<void> => {
 
 .oauth-button {
   flex: 1;
+}
+
+.register-entry {
+  margin-top: 16px;
+  text-align: center;
+  font-size: 14px;
+}
+
+.register-entry-text {
+  color: var(--el-text-color-secondary);
 }
 </style>

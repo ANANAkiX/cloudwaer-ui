@@ -92,6 +92,7 @@
                 <el-dropdown-item disabled>
                   <span>{{ userStore.userInfo.nickname || userStore.userInfo.username }}</span>
                 </el-dropdown-item>
+                <el-dropdown-item command="profile">个人信息</el-dropdown-item>
                 <el-dropdown-item divided command="logout">退出登录</el-dropdown-item>
               </el-dropdown-menu>
             </template>
@@ -295,6 +296,10 @@ const toggleFullscreen = async () => {
 }
 
 const handleCommand = async (command) => {
+  if (command === 'profile') {
+    router.push('/profile')
+    return
+  }
   if (command === 'logout') {
     messageStore.disconnect()
     await userStore.logout()

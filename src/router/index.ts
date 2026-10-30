@@ -19,6 +19,20 @@ const STATIC_ROUTES: RouteRecordRaw[] = [
   },
 
   {
+    path: '/register',
+    name: 'Register',
+    component: () => import('@/views/Register.vue'),
+    meta: { requiresAuth: false, title: '注册' }
+  },
+
+  {
+    path: '/login/oauth-callback',
+    name: 'OauthCallback',
+    component: () => import('@/views/OauthCallback.vue'),
+    meta: { requiresAuth: false, title: '第三方登录' }
+  },
+
+  {
     path: '/wiki/s/:token',
     name: 'WikiShareView',
     component: () => import('@/views/wiki/ShareView.vue'),
@@ -36,6 +50,12 @@ const STATIC_ROUTES: RouteRecordRaw[] = [
         name: 'Dashboard',
         component: () => import('@/views/Dashboard.vue'),
         meta: { title: '首页', icon: 'House' }
+      },
+      {
+        path: '/profile',
+        name: 'Profile',
+        component: () => import('@/views/Profile.vue'),
+        meta: { title: '个人信息' }
       },
       {
         path: '/404',
@@ -273,6 +293,12 @@ async function ensureRoutesLoaded(): Promise<void> {
 
 router.beforeEach(async (to, _from, next) => {
   const userStore = useUserStore()
+
+  // OAuth 回调页放行：不参与登录态跳转，避免误伤回调处理
+  if (to.path === '/login/oauth-callback') {
+    next()
+    return
+  }
 
   if (to.path === '/login' && userStore.token) {
     next('/')
