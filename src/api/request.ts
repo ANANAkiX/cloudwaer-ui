@@ -1,8 +1,9 @@
-import axios, {InternalAxiosRequestConfig, AxiosResponse, AxiosError} from 'axios'
+import axios, {AxiosError, AxiosResponse, InternalAxiosRequestConfig} from 'axios'
 import {useUserStore} from '@/stores/user'
 import {ElMessage} from 'element-plus'
 import router from '@/router'
 import {Result} from '@/types'
+import {disconnectWs} from '@/utils/ws.ts'
 
 const request = axios.create({
     baseURL: '/api',
@@ -72,6 +73,8 @@ let redirectingToLogin = false
 const toLogin = async () => {
     if (redirectingToLogin) return
     redirectingToLogin = true
+    // token 失效跳登录：顺带断掉残留 WS（避免心跳/重连继续跑）
+    disconnectWs()
     try {
         const current = router.currentRoute?.value
         if (!current || current.path !== '/login') {
@@ -201,8 +204,7 @@ request.interceptors.response.use(
         if (res && typeof res === 'object' && 'code' in res) {
             if (res.code === 200) {
                 // 处理分页结果，将分页相关的数字字段从字符串转换为数字
-                const data = convertPageResultNumbers(res.data)
-                return data
+                return convertPageResultNumbers(res.data)
             } else {
                 // 业务错误（code不为200），显示错误消息
                 if (res.code === 403) {

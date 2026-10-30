@@ -47,9 +47,7 @@
             <button class="header-action-btn" type="button">
               <el-icon><Search /></el-icon>
             </button>
-            <button class="header-action-btn" type="button">
-              <el-icon><Bell /></el-icon>
-            </button>
+            <MessageBell />
             <button class="header-action-btn" type="button" @click="toggleFullscreen">
               <el-icon><FullScreen /></el-icon>
             </button>
@@ -164,11 +162,14 @@ import {
   Setting
 } from '@element-plus/icons-vue'
 import MenuItem from './components/MenuItem.vue'
+import MessageBell from '@/components/MessageBell.vue'
+import { useMessageStore } from '@/stores/message.ts'
 
 const route = useRoute()
 const router = useRouter()
 const userStore = useUserStore()
 const tabsStore = useTabsStore()
+const messageStore = useMessageStore()
 const appStore = useAppStore()
 const { t } = useI18n()
 
@@ -295,6 +296,7 @@ const toggleFullscreen = async () => {
 
 const handleCommand = async (command) => {
   if (command === 'logout') {
+    messageStore.disconnect()
     await userStore.logout()
     message.success('退出登录成功')
     router.push('/login')
@@ -324,12 +326,18 @@ const loadUserData = async () => {
     console.error('加载用户数据失败:', error)
     // 错误消息已在 request.ts 中统一处理
     // 如果加载失败，可能是 token 失效，跳转到登录页
+    messageStore.disconnect()
     await userStore.logout()
     router.push('/login')
   }
 }
 
 onMounted(() => {
+  // 接入站内信实时通道（断线自动重连，未读数以 DB 对账）
+  if (userStore.token) {
+    messageStore.connect()
+  }
+
   // 恢复标签页
   tabsStore.restoreTabs()
   isRestoringTabs.value = false

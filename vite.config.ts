@@ -20,6 +20,11 @@ export default defineConfig(({mode}) => {
                     target: env.VITE_GATEWAY_ORIGIN,
                     changeOrigin: true,
                     rewrite: (path: string) => path.replace(/^\/api/, '')
+                },
+                '/ws': {
+                    target: env.VITE_GATEWAY_ORIGIN,
+                    changeOrigin: true,
+                    ws: true
                 }
             }
         }
