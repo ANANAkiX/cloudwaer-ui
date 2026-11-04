@@ -134,3 +134,11 @@ export const deleteDictItem = (id: string | number): Promise<boolean> => {
     params: { id }
   })
 }
+
+/**
+ * 获取所有字典类型（用于表单设计器下拉）
+ */
+export const getDictTypes = async (): Promise<Dict[]> => {
+  const res = await pageDict({ current: 1, size: 500 })
+  return res.records || []
+}
