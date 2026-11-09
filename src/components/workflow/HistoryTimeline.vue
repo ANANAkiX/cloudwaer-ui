@@ -52,6 +52,8 @@ function getTimelineType(action: string): 'primary' | 'success' | 'warning' | 'd
     cc: 'info',
     end: 'success',
     branch_end: 'info',
+    join_arrive: 'info',
+    join_pass: 'success',
     restart: 'warning',
     timer_fire: 'warning',
     error: 'danger'
@@ -75,6 +77,8 @@ function getActionLabel(action: string): string {
     cc: '抄送',
     end: '结束',
     branch_end: '分支完成',
+    join_arrive: '分支到达',
+    join_pass: '汇聚放行',
     restart: '重新发起',
     timer_fire: '定时触发',
     wait: '等待处理',
@@ -113,13 +117,13 @@ function formatDuration(ms: number): string {
 
 .timeline-operator {
   font-size: 13px;
-  color: var(--ink, #333);
+  color: var(--cw-text);
   font-weight: 500;
 }
 
 .timeline-node {
   font-size: 12px;
-  color: var(--muted, #666);
+  color: var(--cw-control-text);
   display: flex;
   align-items: center;
   gap: 4px;
@@ -127,14 +131,14 @@ function formatDuration(ms: number): string {
 
 .timeline-detail {
   font-size: 12px;
-  color: var(--muted, #888);
-  background: color-mix(in srgb, var(--ink, #333) 4%, var(--card, #fff));
+  color: var(--cw-control-text);
+  background: color-mix(in srgb, var(--cw-text) 6%, var(--cw-surface));
   padding: 6px 10px;
   border-radius: 4px;
 }
 
 .timeline-duration {
   font-size: 11px;
-  color: var(--muted, #999);
+  color: var(--cw-control-text);
 }
 </style>

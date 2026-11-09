@@ -436,14 +436,14 @@ defineExpose({ validate, resetFields, formData })
 
 .static-text {
   font-size: 14px;
-  color: var(--ink, #333);
+  color: var(--cw-text);
   padding: 8px 0;
   line-height: 1.6;
 }
 
 .field-tip {
   font-size: 11px;
-  color: var(--muted, #999);
+  color: var(--cw-control-text);
   margin-top: 4px;
 }
 </style>

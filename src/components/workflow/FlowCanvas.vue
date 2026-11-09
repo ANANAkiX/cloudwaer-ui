@@ -168,9 +168,14 @@ function zoomOut() {
   zoom.value = Math.max(zoom.value / 1.2, 0.3)
 }
 function fitView() {
-  zoom.value = 1
-  panX.value = 0
-  panY.value = 0
+  // 真正的「适应画布」：按内容边界缩放并居中（空画布则复位）
+  if (!props.nodes.length) {
+    zoom.value = 1
+    panX.value = 0
+    panY.value = 0
+    return
+  }
+  fitContent()
 }
 function onWheel(e: WheelEvent) {
   const delta = e.deltaY > 0 ? 0.9 : 1.1
@@ -265,8 +270,9 @@ function onCanvasMouseMove(e: MouseEvent) {
     const y = (e.clientY - svgRect.top - dragOffset.y) / zoom.value
 
     if (isCopyDragging.value) {
-      draggingNode.value.x = Math.round(x)
-      draggingNode.value.y = Math.round(y)
+      const p = clampPos(x, y)
+      draggingNode.value.x = p.x
+      draggingNode.value.y = p.y
     } else {
       const oldX = draggingNode.value.x || 0
       const oldY = draggingNode.value.y || 0
@@ -278,13 +284,15 @@ function onCanvasMouseMove(e: MouseEvent) {
       if (selectedNodeIds.value.has(draggingNode.value.nodeId) && selectedNodeIds.value.size > 1) {
         for (const node of props.nodes) {
           if (selectedNodeIds.value.has(node.nodeId)) {
-            node.x = (node.x || 0) + dx
-            node.y = (node.y || 0) + dy
+            const p = clampPos((node.x || 0) + dx, (node.y || 0) + dy)
+            node.x = p.x
+            node.y = p.y
           }
         }
       } else {
-        draggingNode.value.x = newX
-        draggingNode.value.y = newY
+        const p = clampPos(newX, newY)
+        draggingNode.value.x = p.x
+        draggingNode.value.y = p.y
       }
     }
     return
@@ -315,7 +323,8 @@ function onCanvasMouseUp(e: MouseEvent) {
     if (svgRect) {
       const x = (e.clientX - svgRect.left - dragOffset.x) / zoom.value
       const y = (e.clientY - svgRect.top - dragOffset.y) / zoom.value
-      emit('node-copy', draggingNode.value, Math.round(x), Math.round(y))
+      const p = clampPos(x, y)
+      emit('node-copy', draggingNode.value, p.x, p.y)
     }
     draggingNode.value = null
     isCopyDragging.value = false
@@ -399,15 +408,25 @@ function onDragOver(e: DragEvent) {
   e.dataTransfer!.dropEffect = 'copy'
 }
 
+// 节点坐标钳制在画布内容区内，避免贴边被 SVG 视口裁切
+function clampPos(x: number, y: number): { x: number; y: number } {
+  return {
+    x: Math.round(Math.min(Math.max(x, 80), canvasWidth - 80)),
+    y: Math.round(Math.min(Math.max(y, 50), canvasHeight - 70))
+  }
+}
+
 function onDrop(e: DragEvent) {
     const nodeType = (window as any).__dragNodeType || e.dataTransfer?.getData('application/x-node-type') || e.dataTransfer?.getData('text/plain')
     ;(window as any).__dragNodeType = null
     if (!nodeType) return
     const svgRect = getSvgRect()
     if (!svgRect) return
-    const x = Math.round((e.clientX - svgRect.left) / zoom.value)
-    const y = Math.round((e.clientY - svgRect.top) / zoom.value)
-    emit('node-add', nodeType, x, y)
+    const pos = clampPos(
+      (e.clientX - svgRect.left) / zoom.value,
+      (e.clientY - svgRect.top) / zoom.value
+    )
+    emit('node-add', nodeType, pos.x, pos.y)
   }
 
 // ===== 工具函数 =====
@@ -481,6 +500,8 @@ function fitContent() {
   panY.value = (bh - ch * zoom.value) / 2 - minY * zoom.value
 }
 
+defineExpose({ fitView, fitContent, zoomIn, zoomOut })
+
 </script>
 
 <style scoped>
@@ -528,7 +549,7 @@ function fitContent() {
 
 .canvas-body {
   flex: 1;
-  overflow: auto;
+  overflow: hidden;
   cursor: grab;
   position: relative;
   user-select: none;

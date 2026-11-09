@@ -58,100 +58,142 @@
       </div>
     </el-card>
 
-    <!-- 详情抽屉 -->
-    <el-drawer v-model="detailVisible" title="流程详情" size="80%">
+    <!-- 详情抽屉：摘要条 + 左流程图 + 右侧栏（表单/流转/任务） -->
+    <el-drawer v-model="detailVisible" title="流程详情" size="86%">
       <template v-if="detailInstance">
-        <el-descriptions :column="3" border size="small">
-          <el-descriptions-item label="流程标题">{{ detailInstance.title }}</el-descriptions-item>
-          <el-descriptions-item label="流程名称">{{ detailInstance.defName }}</el-descriptions-item>
-          <el-descriptions-item label="发起人">{{ detailInstance.startUser }}</el-descriptions-item>
-          <el-descriptions-item label="状态">
+        <!-- 顶部摘要条 -->
+        <div class="detail-summary">
+          <div class="summary-title-row">
+            <span class="summary-title">{{ detailInstance.title }}</span>
             <el-tag :type="getStatusType(detailInstance.instStatus)" size="small">
               {{ detailInstance.statusDesc }}
             </el-tag>
-          </el-descriptions-item>
-          <el-descriptions-item label="发起时间">{{ formatTime(detailInstance.startTime) }}</el-descriptions-item>
-          <el-descriptions-item label="结束时间">{{ formatTime(detailInstance.endTime) }}</el-descriptions-item>
-        </el-descriptions>
-
-        <!-- 流程表单数据 -->
-        <div v-if="formDataEntries.length > 0" class="form-data-section">
-          <div class="section-title">📋 流程表单</div>
-          <el-descriptions :column="3" border size="small">
-            <el-descriptions-item v-for="[k, v] in formDataEntries" :key="k" :label="k">
-              {{ formatValue(v) }}
-            </el-descriptions-item>
-          </el-descriptions>
+          </div>
+          <div class="summary-meta">
+            <span class="meta-item"><span class="meta-label">流程名称</span>{{ detailInstance.defName }}</span>
+            <span class="meta-item"><span class="meta-label">发起人</span>{{ detailInstance.startUser }}</span>
+            <span class="meta-item"><span class="meta-label">发起时间</span>{{ formatTime(detailInstance.startTime) }}</span>
+            <span class="meta-item"><span class="meta-label">结束时间</span>{{ formatTime(detailInstance.endTime) }}</span>
+          </div>
         </div>
 
-        <!-- 节点关联表单 -->
-        <div v-if="nodeFormFields.length > 0" class="form-data-section">
-          <div class="section-title">📋 节点关联表单</div>
-          <FormRenderer :fields="nodeFormFields" v-model="nodeFormData" :readonly="true" />
-        </div>
-
-        <!-- 流程图 + 节点历史 -->
-        <div class="process-view">
-          <!-- 流程图 -->
-          <div class="process-canvas">
-            <div class="section-title">
-              <span>流程图</span>
+        <!-- 主体两栏 -->
+        <div class="detail-body">
+          <!-- 左：流程图 -->
+          <div class="detail-diagram">
+            <div class="panel-hd">
+              <span class="panel-title">流程图</span>
               <span class="legend">
                 <span class="legend-item"><span class="dot dot-done"></span> 已完成</span>
                 <span class="legend-item"><span class="dot dot-active"></span> 进行中</span>
                 <span class="legend-item"><span class="dot dot-pending"></span> 未到达</span>
               </span>
             </div>
-            <FlowCanvas
-              :nodes="processNodes"
-              :edges="processEdges"
-              :readonly="true"
-              @node-click="onNodeClick"
-            />
+            <div class="diagram-canvas-wrap">
+              <FlowCanvas
+                :nodes="processNodes"
+                :edges="processEdges"
+                :readonly="true"
+                @node-click="onNodeClick"
+              />
+            </div>
           </div>
 
-          <!-- 节点历史 -->
-          <div class="node-history">
-            <div class="section-title">
-              <span>📋 {{ selectedNodeName || '点击节点查看历史' }}</span>
+          <!-- 右：表单数据 / 流转记录 / 任务列表 -->
+          <div class="detail-side">
+            <div v-if="selectedNodeName" class="node-filter-chip">
+              <span>已选节点 · {{ selectedNodeName }}</span>
+              <el-button link type="primary" size="small" @click="clearNodeFilter">查看全部</el-button>
             </div>
-            <div v-if="selectedNodeHistory.length > 0" class="node-history-list">
-              <div v-for="h in selectedNodeHistory" :key="h.id" class="history-item">
-                <div class="history-header">
-                  <el-tag :type="getActionTagType(h.action)" size="small">{{ getActionLabel(h.action) }}</el-tag>
-                  <span class="history-operator">{{ h.operator || '系统' }}</span>
-                  <span class="history-time">{{ formatTime(h.createTime) }}</span>
-                </div>
-                <div v-if="h.detail" class="history-detail">{{ h.detail }}</div>
-              </div>
-            </div>
-            <el-empty v-else-if="selectedNodeName" description="该节点暂无操作记录" :image-size="60" />
-            <el-empty v-else description="点击左侧流程图中的节点" :image-size="60" />
+            <el-tabs v-model="sideTab" class="side-tabs">
+              <el-tab-pane label="表单数据" name="form">
+                <template v-if="selectedNodeId">
+                  <!-- 聚焦单个节点 -->
+                  <div v-if="selectedNodeForm" class="form-block">
+                    <div class="form-hd">节点 · {{ selectedNodeForm.nodeName }}</div>
+                    <FormRenderer
+                      v-if="selectedNodeForm.fields.length > 0"
+                      :fields="selectedNodeForm.fields"
+                      :model-value="selectedNodeForm.data"
+                      :readonly="true"
+                      label-width="90px"
+                      size="small"
+                    />
+                    <div v-else class="kv-list">
+                      <div v-for="(v, k) in selectedNodeForm.data" :key="k" class="kv-item">
+                        <span class="kv-label">{{ k }}</span>
+                        <span class="kv-value">{{ formatValue(v) }}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <el-empty v-else description="该节点暂无表单数据" :image-size="60" />
+                </template>
+                <template v-else>
+                  <!-- 流程表单 -->
+                  <div v-if="formDataEntries.length > 0" class="form-block">
+                    <div class="form-hd">流程表单</div>
+                    <div class="kv-list">
+                      <div v-for="[k, v] in formDataEntries" :key="k" class="kv-item">
+                        <span class="kv-label">{{ k }}</span>
+                        <span class="kv-value">{{ formatValue(v) }}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <!-- 已到达节点的表单，按流转顺序分组 -->
+                  <div v-for="nf in nodeFormList" :key="nf.nodeId" class="form-block">
+                    <div class="form-hd">节点 · {{ nf.nodeName }}</div>
+                    <FormRenderer
+                      v-if="nf.fields.length > 0"
+                      :fields="nf.fields"
+                      :model-value="nf.data"
+                      :readonly="true"
+                      label-width="90px"
+                      size="small"
+                    />
+                    <div v-else class="kv-list">
+                      <div v-for="(v, k) in nf.data" :key="k" class="kv-item">
+                        <span class="kv-label">{{ k }}</span>
+                        <span class="kv-value">{{ formatValue(v) }}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <el-empty
+                    v-if="formDataEntries.length === 0 && nodeFormList.length === 0"
+                    description="暂无表单数据"
+                    :image-size="60"
+                  />
+                </template>
+              </el-tab-pane>
+
+              <el-tab-pane name="history">
+                <template #label>流转记录<span v-if="visibleHistory.length" class="tab-count">{{ visibleHistory.length }}</span></template>
+                <HistoryTimeline v-if="visibleHistory.length > 0" :history="visibleHistory" />
+                <el-empty
+                  v-else
+                  :description="selectedNodeName ? '该节点暂无操作记录' : '暂无操作记录'"
+                  :image-size="60"
+                />
+              </el-tab-pane>
+
+              <el-tab-pane label="任务列表" name="tasks">
+                <el-table :data="taskList" border size="small">
+                  <el-table-column prop="taskName" label="任务名称" min-width="110" />
+                  <el-table-column prop="nodeName" label="节点" min-width="90" />
+                  <el-table-column prop="assignee" label="处理人" width="85" align="center" />
+                  <el-table-column prop="statusDesc" label="状态" width="75" align="center" />
+                  <el-table-column prop="comment" label="意见" min-width="110" show-overflow-tooltip />
+                </el-table>
+              </el-tab-pane>
+            </el-tabs>
           </div>
         </div>
-
-        <!-- 全部历史（折叠） -->
-        <el-collapse style="margin-top: 12px">
-          <el-collapse-item title="完整操作记录" name="all">
-            <HistoryTimeline :history="historyList" />
-          </el-collapse-item>
-          <el-collapse-item title="任务列表" name="tasks">
-            <el-table :data="taskList" border size="small">
-              <el-table-column prop="taskName" label="任务名称" min-width="120" />
-              <el-table-column prop="nodeName" label="节点" min-width="100" />
-              <el-table-column prop="assignee" label="处理人" width="90" />
-              <el-table-column prop="statusDesc" label="状态" width="80" />
-              <el-table-column prop="comment" label="意见" min-width="120" show-overflow-tooltip />
-            </el-table>
-          </el-collapse-item>
-        </el-collapse>
       </template>
     </el-drawer>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import HistoryTimeline from '@/components/workflow/HistoryTimeline.vue'
 import FormRenderer from '@/components/workflow/FormRenderer.vue'
@@ -166,10 +208,19 @@ import {
   getTasksByInstance,
   getWorkflowHistory,
   getWorkflowDefDetail,
+  getWorkflowFormDetail,
+  getWorkflowNodeForm,
   type WorkflowInstance,
   type WorkflowTask,
   type WorkflowHistory
 } from '@/api/workflow'
+
+interface NodeFormEntry {
+  nodeId: string
+  nodeName: string
+  fields: any[]
+  data: Record<string, any>
+}
 
 const loading = ref(false)
 const tableData = ref<WorkflowInstance[]>([])
@@ -184,11 +235,34 @@ const historyList = ref<WorkflowHistory[]>([])
 const taskList = ref<WorkflowTask[]>([])
 const processNodes = ref<any[]>([])
 const processEdges = ref<any[]>([])
-const selectedNodeName = ref('')
-const selectedNodeHistory = ref<WorkflowHistory[]>([])
 const formDataEntries = ref<[string, any][]>([])
-const nodeFormFields = ref<any[]>([])
-const nodeFormData = ref<Record<string, any>>({})
+const nodeForms = ref<Record<string, NodeFormEntry>>({})
+
+// 右侧栏
+const sideTab = ref<'form' | 'history' | 'tasks'>('form')
+const selectedNodeId = ref('')
+const selectedNodeName = ref('')
+
+const visibleHistory = computed(() =>
+  selectedNodeId.value
+    ? historyList.value.filter(h => h.nodeId === selectedNodeId.value)
+    : historyList.value
+)
+
+const nodeFormList = computed(() => {
+  const order: string[] = []
+  for (const h of historyList.value) {
+    if (h.nodeId && nodeForms.value[h.nodeId] && !order.includes(h.nodeId)) order.push(h.nodeId)
+  }
+  for (const nid of Object.keys(nodeForms.value)) {
+    if (!order.includes(nid)) order.push(nid)
+  }
+  return order.map(nid => nodeForms.value[nid])
+})
+
+const selectedNodeForm = computed(() =>
+  selectedNodeId.value ? nodeForms.value[selectedNodeId.value] || null : null
+)
 
 onMounted(() => loadData())
 
@@ -206,16 +280,6 @@ async function loadData() {
   } finally {
     loading.value = false
   }
-}
-
-function getActionLabel(action: string): string {
-  const map: Record<string, string> = { start:'发起',create:'创建',claim:'认领',approve:'同意',reject:'驳回',transfer:'转办',return:'退回',cc:'抄送',end:'结束',branch_end:'分支完成',restart:'重新发起',timer_fire:'定时触发',wait:'等待处理',error:'异常' }
-  return map[action] || action
-}
-
-function getActionTagType(action: string): any {
-  const map: Record<string, any> = { start:'primary',approve:'success',reject:'danger',transfer:'warning',return:'warning',cc:'info',end:'success',branch_end:'info' }
-  return map[action] || 'info'
 }
 
 function formatTime(time?: string): string {
@@ -253,27 +317,23 @@ function formatValue(v: any): string {
   return String(v)
 }
 
-async function onNodeClick(node: any) {
-  selectedNodeName.value = node.nodeName || node.nodeId
-  selectedNodeHistory.value = historyList.value.filter(h => h.nodeId === node.nodeId)
-
-  // 从 wf_instance_node_form 表加载节点表单
-  nodeFormFields.value = []
-  nodeFormData.value = {}
-  try {
-    const { getWorkflowNodeForm } = await import('@/api/workflow')
-    const instId = detailInstance.value?.instanceId || (detailInstance.value as any)?.instanceId || ''
-    const res: any = await getWorkflowNodeForm(instId, node.nodeId)
-    console.warn('[Monitor] nodeForm:', res ? 'found' : 'empty', 'schema=' + !!res?.formSchema, 'data=' + !!res?.formData)
-    if (res?.formSchema) {
-      nodeFormFields.value = JSON.parse(res.formSchema)
-    }
-    if (res?.formData) {
-      nodeFormData.value = JSON.parse(res.formData)
-    }
-  } catch (e) {
-    console.warn('[Monitor] nodeForm error:', e)
+function onNodeClick(node: any) {
+  // 再次点击同一节点 = 取消筛选
+  if (selectedNodeId.value === node.nodeId) {
+    clearNodeFilter()
+    return
   }
+  selectedNodeId.value = node.nodeId
+  selectedNodeName.value = node.nodeName || node.nodeId
+  // 有记录看记录，否则看表单
+  const hasHistory = historyList.value.some(h => h.nodeId === node.nodeId)
+  if (hasHistory) sideTab.value = 'history'
+  else if (nodeForms.value[node.nodeId]) sideTab.value = 'form'
+}
+
+function clearNodeFilter() {
+  selectedNodeId.value = ''
+  selectedNodeName.value = ''
 }
 
 function markNodeStates() {
@@ -297,11 +357,32 @@ function markNodeStates() {
   })
 }
 
+async function loadNodeForms(instanceId: string) {
+  const visited = [...new Set(historyList.value.map(h => h.nodeId).filter(Boolean))] as string[]
+  const nameMap: Record<string, string> = {}
+  for (const n of processNodes.value) nameMap[n.nodeId] = n.nodeName || n.nodeId
+  const forms: Record<string, NodeFormEntry> = {}
+  await Promise.all(visited.map(async (nid) => {
+    try {
+      const res: any = await getWorkflowNodeForm(instanceId, nid)
+      const fields = res?.formSchema ? JSON.parse(res.formSchema) : []
+      const data = res?.formData ? JSON.parse(res.formData) : {}
+      if (fields.length > 0 || Object.keys(data).length > 0) {
+        forms[nid] = { nodeId: nid, nodeName: nameMap[nid] || nid, fields, data }
+      }
+    } catch { /* 单个节点表单失败不影响整体 */ }
+  }))
+  nodeForms.value = forms
+}
+
 async function handleDetail(row: WorkflowInstance) {
   try {
     const res: any = await getWorkflowInstanceDetail(row.instanceId)
     detailInstance.value = res
     detailVisible.value = true
+    sideTab.value = 'form'
+    selectedNodeId.value = ''
+    selectedNodeName.value = ''
 
     // 加载任务列表
     const taskRes: any = await getTasksByInstance(row.instanceId)
@@ -316,9 +397,10 @@ async function handleDetail(row: WorkflowInstance) {
     }
 
     // 加载流程定义（节点+连线）
+    let defRes: any = null
     try {
       const defId = (detailInstance.value as any)?.defId || (row as any).defId || 0
-      const defRes: any = await getWorkflowDefDetail(defId)
+      defRes = await getWorkflowDefDetail(defId)
       processNodes.value = defRes?.nodes || []
       processEdges.value = defRes?.edges || []
       markNodeStates()
@@ -327,21 +409,14 @@ async function handleDetail(row: WorkflowInstance) {
       processEdges.value = []
     }
 
-    selectedNodeName.value = ''
-    selectedNodeHistory.value = []
-
     // 解析流程表单数据（映射字段ID→标签）
     try {
       const formJson = (detailInstance.value as any)?.formJson
       if (formJson) {
         const data = JSON.parse(formJson)
-        // 加载表单 schema 来映射标签
         let labelMap: Record<string, string> = {}
         try {
-          const defId = (detailInstance.value as any)?.defId || (row as any).defId || 0
-          const defRes: any = await getWorkflowDefDetail(defId)
           if (defRes?.formId) {
-            const { getWorkflowFormDetail } = await import('@/api/workflow')
             const formRes: any = await getWorkflowFormDetail(defRes.formId)
             if (formRes?.schemaJson) {
               const fields = JSON.parse(formRes.schemaJson)
@@ -358,6 +433,9 @@ async function handleDetail(row: WorkflowInstance) {
     } catch {
       formDataEntries.value = []
     }
+
+    // 已到达节点的节点表单
+    await loadNodeForms(row.instanceId)
   } catch {
     ElMessage.error('加载详情失败')
   }
@@ -422,73 +500,85 @@ async function handleRestart(row: WorkflowInstance) {
   justify-content: flex-end;
 }
 
-.process-view {
-  display: flex;
-  flex-direction: row;
-  gap: 16px;
-  margin-top: 16px;
-  height: 400px;
+/* ===== 详情摘要条 ===== */
+.detail-summary {
+  padding: 12px 16px;
+  border: 1px solid var(--cw-border);
+  border-radius: 8px;
+  background: var(--cw-surface);
 }
 
-.process-canvas {
+.summary-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.summary-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--cw-text);
+  word-break: break-all;
+}
+
+.summary-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 22px;
+  margin-top: 8px;
+}
+
+.meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--cw-text);
+}
+
+.meta-label {
+  color: var(--cw-control-text);
+}
+
+/* ===== 主体两栏 ===== */
+.detail-body {
+  display: flex;
+  gap: 14px;
+  margin-top: 14px;
+  height: min(580px, calc(100vh - 270px));
+  min-height: 380px;
+}
+
+.detail-diagram {
   flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
-  border: 1px solid var(--border, #e2e8f0);
+  border: 1px solid var(--cw-border);
   border-radius: 8px;
-}
-
-.process-canvas .section-title {
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--border, #e2e8f0);
-}
-
-.process-canvas :deep(.flow-canvas) {
-  height: 340px;
-  border: none;
-  border-radius: 0;
-}
-
-.node-history {
-  width: 320px;
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  border: 1px solid var(--border, #e2e8f0);
-  border-radius: 8px;
+  background: var(--cw-surface);
   overflow: hidden;
 }
 
-.node-history .section-title {
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--border, #e2e8f0);
-}
-
-.node-history-list {
-  flex: 1;
-  overflow-y: auto;
-  padding: 8px 12px;
-}
-
-.section-title {
+.panel-hd {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--cw-border);
+}
+
+.panel-title {
   font-size: 13px;
   font-weight: 600;
-  margin-bottom: 0;
-  padding-bottom: 8px;
-  border-bottom: 1px solid var(--border, #e2e8f0);
+  color: var(--cw-text);
 }
 
 .legend {
   display: flex;
   gap: 12px;
   font-size: 11px;
-  font-weight: 400;
-  color: var(--muted, #888);
+  color: var(--cw-control-text);
 }
 
 .legend-item {
@@ -503,47 +593,129 @@ async function handleRestart(row: WorkflowInstance) {
   border-radius: 50%;
   display: inline-block;
 }
-.dot-done { background: #22c55e; }
-.dot-active { background: #3b82f6; }
-.dot-pending { background: #d0d4dd; }
+.dot-done { background: var(--el-color-success); }
+.dot-active { background: var(--el-color-primary); }
+.dot-pending { background: var(--el-color-info); opacity: 0.45; }
 
-.history-item {
-  padding: 10px 0;
-  border-bottom: 1px solid var(--border, #e2e8f0);
+.diagram-canvas-wrap {
+  flex: 1;
+  min-height: 0;
 }
 
-.history-header {
+.diagram-canvas-wrap :deep(.flow-canvas) {
+  height: 100%;
+  border: none;
+  border-radius: 0;
+}
+
+/* 只读监控视图不需要设计器操作提示 */
+.diagram-canvas-wrap :deep(.toolbar-hint) {
+  display: none;
+}
+
+/* ===== 右侧栏 ===== */
+.detail-side {
+  width: 360px;
+  flex-shrink: 0;
   display: flex;
+  flex-direction: column;
+  border: 1px solid var(--cw-border);
+  border-radius: 8px;
+  background: var(--cw-surface);
+  overflow: hidden;
+}
+
+.node-filter-chip {
+  display: flex;
+  justify-content: space-between;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 4px;
-}
-
-.history-operator {
+  padding: 5px 12px;
   font-size: 12px;
-  font-weight: 500;
-  color: var(--ink, #333);
+  color: var(--cw-accent);
+  background: var(--cw-control-bg);
+  border-bottom: 1px solid var(--cw-border);
 }
 
-.history-time {
-  font-size: 11px;
-  color: var(--muted, #999);
-  margin-left: auto;
+.side-tabs {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
-.form-data-section {
-  margin-top: 12px;
+.side-tabs :deep(.el-tabs__header) {
+  margin: 0;
+  padding: 0 12px;
 }
 
-.form-data-section .section-title {
+.side-tabs :deep(.el-tabs__content) {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 10px 12px 14px;
+}
+
+.side-tabs :deep(.el-tab-pane) {
+  min-height: 100%;
+}
+
+.tab-count {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 0 6px;
+  font-size: 10px;
+  line-height: 16px;
+  border-radius: 8px;
+  color: var(--cw-accent);
+  background: color-mix(in srgb, var(--cw-accent) 14%, transparent);
+}
+
+/* ===== 表单键值列表 ===== */
+.form-block {
+  margin-bottom: 14px;
+}
+
+.form-block:last-child {
+  margin-bottom: 0;
+}
+
+.form-hd {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--cw-text);
+  padding: 4px 8px;
   margin-bottom: 8px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--cw-accent) 8%, var(--cw-surface));
 }
 
-.history-detail {
+.kv-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.kv-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 7px 2px;
+  border-bottom: 1px solid var(--cw-border);
   font-size: 12px;
-  color: var(--muted, #666);
-  background: var(--bg, #f8fafc);
-  padding: 6px 10px;
-  border-radius: 4px;
+}
+
+.kv-item:last-child {
+  border-bottom: none;
+}
+
+.kv-label {
+  flex-shrink: 0;
+  color: var(--cw-control-text);
+}
+
+.kv-value {
+  color: var(--cw-text);
+  text-align: right;
+  word-break: break-all;
 }
 </style>

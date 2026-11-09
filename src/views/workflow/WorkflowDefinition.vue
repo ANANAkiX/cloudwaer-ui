@@ -63,7 +63,7 @@
       @close="onDesignerClose"
     >
       <div class="designer-dialog-body">
-        <WorkflowDesigner :def-id="designerDefId" @close="onDesignerClose" />
+        <WorkflowDesigner :def-id="designerDefId" embedded @close="onDesignerClose" />
       </div>
     </el-dialog>
 

@@ -45,6 +45,7 @@ export interface UserInfo {
   nickname?: string
   email?: string
   phone?: string
+  avatar?: string
   roleIds?: string[]
 }
 

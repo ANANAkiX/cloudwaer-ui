@@ -85,7 +85,7 @@
           </div>
           <el-dropdown @command="handleCommand" trigger="click">
             <span class="user-avatar">
-              <el-avatar :size="32" :icon="UserFilled" />
+              <el-avatar :size="32" :src="avatarUrl || undefined" :icon="UserFilled" />
             </span>
             <template #dropdown>
               <el-dropdown-menu>
@@ -173,6 +173,15 @@ const tabsStore = useTabsStore()
 const messageStore = useMessageStore()
 const appStore = useAppStore()
 const { t } = useI18n()
+
+// 头像地址：http(s)/带 /api 前缀直用，裸路径补 /api（兼容 upload 返回的 accessUrl 形态）
+const avatarUrl = computed(() => {
+  const raw = userStore.userInfo?.avatar
+  if (!raw) return ''
+  if (/^https?:\/\//.test(raw) || raw.startsWith('/api/')) return raw
+  if (raw.startsWith('/')) return '/api' + raw
+  return raw
+})
 
 const isCollapse = ref(false)
 const refreshKey = ref(0)
@@ -341,6 +350,8 @@ onMounted(() => {
   // 接入站内信实时通道（断线自动重连，未读数以 DB 对账）
   if (userStore.token) {
     messageStore.connect()
+    // 刷新用户资料（头像/昵称可能在别处更新过）
+    userStore.loadUserInfo()
   }
 
   // 恢复标签页

@@ -301,6 +301,11 @@ export function getWorkflowFormDetail(id: string | number) {
   return request.get<WorkflowForm>('/workflow/form/detail', { params: { id } })
 }
 
+/** 可用监听器目录（key → 显示名，供设计器下拉） */
+export function getListenerCatalog() {
+  return request.get<Record<string, string>>('/workflow/listener/catalog')
+}
+
 export function saveWorkflowForm(data: WorkflowForm) {
   return request.post<string | number>('/workflow/form/save', data)
 }

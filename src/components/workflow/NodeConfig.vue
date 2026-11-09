@@ -20,10 +20,10 @@
           <el-select v-model="form.assigneeType" placeholder="选择类型" @change="onAssigneeTypeChange">
             <el-option label="指定用户" value="user" />
             <el-option label="角色" value="role" />
-            <el-option label="部门" value="dept" />
             <el-option label="流程变量" value="variable" />
             <el-option label="发起人" value="initiator" />
-            <el-option label="上级领导" value="leader" />
+            <el-option label="部门（暂未支持）" value="dept" disabled />
+            <el-option label="上级领导（暂未支持）" value="leader" disabled />
           </el-select>
         </el-form-item>
         <el-form-item v-if="showAssigneeVal" label="处理人值">
@@ -75,7 +75,7 @@
         <el-divider content-position="left">审批配置</el-divider>
         <el-form-item label="关联表单">
           <el-select v-model="nodeFormId" placeholder="使用流程默认表单" clearable style="width: 100%">
-            <el-option label="使用流程默认表单" :value="undefined" />
+            <el-option label="使用流程默认表单" :value="''" />
             <el-option v-for="f in formList" :key="f.id" :label="f.formName" :value="f.id" />
           </el-select>
           <div class="field-tip">选了节点表单则审批时展示此表单，不选则用流程级默认表单</div>
@@ -101,7 +101,7 @@
         <el-form-item label="延时类型">
           <el-select v-model="timerConfig.delayType">
             <el-option label="固定时长" value="fixed" />
-            <el-option label="Cron 表达式" value="cron" />
+            <el-option label="Cron 表达式（暂未支持）" value="cron" disabled />
           </el-select>
         </el-form-item>
         <el-form-item v-if="timerConfig.delayType === 'fixed'" label="延时时长">
@@ -114,7 +114,8 @@
           </el-select>
         </el-form-item>
         <el-form-item v-if="timerConfig.delayType === 'cron'" label="Cron">
-          <el-input v-model="timerConfig.cron" placeholder="0 0 9 * * ?" />
+          <el-input v-model="timerConfig.cron" placeholder="0 0 9 * * ?" disabled />
+          <div class="field-tip">暂未支持：目前仅固定时长延时可用</div>
         </el-form-item>
       </template>
 
@@ -125,8 +126,9 @@
           <el-select v-model="triggerConfig.triggerType">
             <el-option label="信号触发" value="signal" />
             <el-option label="消息触发" value="message" />
-            <el-option label="Webhook" value="webhook" />
+            <el-option label="Webhook（暂未支持）" value="webhook" disabled />
           </el-select>
+          <div class="field-tip">通过触发接口 /workflow/trigger/fire 唤醒流程</div>
         </el-form-item>
         <el-form-item label="触发标识">
           <el-input v-model="triggerConfig.triggerName" placeholder="信号/消息名称" />
@@ -162,6 +164,23 @@
             <el-option label="PUT" value="PUT" />
             <el-option label="DELETE" value="DELETE" />
           </el-select>
+        </el-form-item>
+      </template>
+
+      <!-- 子流程配置 -->
+      <template v-if="form.nodeType === 'sub_process'">
+        <el-divider content-position="left">子流程配置</el-divider>
+        <el-form-item label="子流程">
+          <el-select v-model="subProcessConfig.subDefKey" placeholder="选择子流程" clearable style="width: 100%">
+            <el-option v-for="d in defList" :key="d.defKey" :label="d.defName" :value="d.defKey" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="传递变量">
+          <el-switch v-model="subProcessConfig.passVariables" />
+        </el-form-item>
+        <el-form-item label="等待完成">
+          <el-switch v-model="subProcessConfig.waitComplete" disabled />
+          <div class="field-tip">暂未支持：子流程启动后主流程立即继续</div>
         </el-form-item>
       </template>
 
@@ -218,10 +237,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, watch, onMounted } from 'vue'
+import { ref, reactive, computed, watch, nextTick, onMounted } from 'vue'
 import { Delete, Plus } from '@element-plus/icons-vue'
 import type { WorkflowNode } from '@/api/workflow'
-import { getWorkflowForms } from '@/api/workflow'
+import { getWorkflowForms, getWorkflowDefs, getListenerCatalog } from '@/api/workflow'
 import { getUserList } from '@/api/user'
 import { getRoleList } from '@/api/role'
 import type { UserInfo, RoleInfo } from '@/types'
@@ -270,6 +289,17 @@ const serviceConfig = reactive({
 const nodeFormId = ref<string | number | undefined>()
 const formList = ref<{ id: string | number; formName: string }[]>([])
 
+// 子流程配置
+const subProcessConfig = reactive({ subDefKey: '', waitComplete: false, passVariables: true })
+const defList = ref<{ defKey: string; defName: string }[]>([])
+
+async function loadDefs() {
+  try {
+    const res: any = await getWorkflowDefs({ current: 1, size: 200 })
+    defList.value = (res?.records || []).map((d: any) => ({ defKey: d.defKey, defName: d.defName || d.defKey }))
+  } catch { /* ignore */ }
+}
+
 // 节点动作
 interface NodeAction {
   actionType: string
@@ -316,12 +346,25 @@ onMounted(() => {
   loadUsers()
   loadRoles()
   loadForms()
+  loadDefs()
+  loadListenerCatalog()
 })
+
+// 监听器目录（key → 显示名）
+const listenerOptions = ref<Record<string, string>>({})
+
+async function loadListenerCatalog() {
+  try {
+    const res: any = await getListenerCatalog()
+    listenerOptions.value = res || {}
+  } catch { /* 拉取失败时下拉为空，不阻塞配置 */ }
+}
 
 async function loadForms() {
   try {
     const res: any = await getWorkflowForms({ current: 1, size: 100 })
-    formList.value = res?.records || []
+    // 过滤掉无 id 的脏数据，避免 el-option value 传 null/undefined 触发 Prop 警告
+    formList.value = (res?.records || []).filter((f: any) => f.id !== undefined && f.id !== null)
   } catch { /* ignore */ }
 }
 
@@ -371,39 +414,65 @@ const assigneePlaceholder = computed(() => {
 })
 
 // ===== 监听 =====
+// 切换节点时的程序化同步标记：期间抑制自动 emit，避免残留/中间态写回画布
+let syncing = false
+
 watch(() => props.node, (node) => {
-  if (node) {
-    Object.assign(form, node)
-    // 同步用户/角色多选值
-    if (form.assigneeType === 'user') {
-      userValues.value = form.assigneeVal ? form.assigneeVal.split(',').map(s => s.trim()).filter(Boolean) : []
-      roleValues.value = []
-    } else if (form.assigneeType === 'role') {
-      roleValues.value = form.assigneeVal ? form.assigneeVal.split(',').map(s => s.trim()).filter(Boolean) : []
-      userValues.value = []
-    } else {
-      userValues.value = []
-      roleValues.value = []
-    }
-    // 解析 configJson
-    if (node.configJson) {
-      try {
-        const cfg = JSON.parse(node.configJson)
-        nodeFormId.value = cfg.formId || undefined
-        if (form.nodeType === 'timer') Object.assign(timerConfig, cfg)
-        if (form.nodeType === 'trigger') Object.assign(triggerConfig, cfg)
-        if (form.nodeType === 'service') Object.assign(serviceConfig, cfg)
-      } catch { /* ignore */ }
-    }
-    // 解析 actionJson
-    if (node.actionJson) {
-      try { actions.value = JSON.parse(node.actionJson) } catch { actions.value = [] }
-    }
-    // 解析 listenerJson
-    if (node.listenerJson) {
-      try { listeners.value = JSON.parse(node.listenerJson) } catch { listeners.value = [] }
-    }
+  if (!node) return
+  syncing = true
+  // 先整体重置到默认值，避免上一节点的残留属性串到新节点
+  Object.assign(form, {
+    nodeId: '',
+    nodeName: '',
+    nodeType: 'user_task',
+    assigneeType: 'user',
+    assigneeVal: '',
+    multiType: 'any',
+    multiCount: 1,
+    dueHours: 24
+  })
+  nodeFormId.value = undefined
+  Object.assign(timerConfig, { delayType: 'fixed', delayValue: 30, delayUnit: 'minutes', cron: '' })
+  Object.assign(triggerConfig, { triggerType: 'signal', triggerName: '' })
+  Object.assign(serviceConfig, { serviceType: 'http', method: 'GET', url: '' })
+  Object.assign(subProcessConfig, { subDefKey: '', waitComplete: false, passVariables: true })
+  actions.value = []
+  listeners.value = []
+  userValues.value = []
+  roleValues.value = []
+  // 再套用节点自身字段
+  Object.assign(form, node)
+  // 同步用户/角色多选值
+  if (form.assigneeType === 'user') {
+    userValues.value = form.assigneeVal ? form.assigneeVal.split(',').map(s => s.trim()).filter(Boolean) : []
+    roleValues.value = []
+  } else if (form.assigneeType === 'role') {
+    roleValues.value = form.assigneeVal ? form.assigneeVal.split(',').map(s => s.trim()).filter(Boolean) : []
+    userValues.value = []
+  } else {
+    userValues.value = []
+    roleValues.value = []
   }
+  // 解析 configJson
+  if (node.configJson) {
+    try {
+      const cfg = JSON.parse(node.configJson)
+      nodeFormId.value = cfg.formId || undefined
+      if (form.nodeType === 'timer') Object.assign(timerConfig, cfg)
+      if (form.nodeType === 'trigger') Object.assign(triggerConfig, cfg)
+      if (form.nodeType === 'service') Object.assign(serviceConfig, cfg)
+      if (form.nodeType === 'sub_process') Object.assign(subProcessConfig, cfg)
+    } catch { /* ignore */ }
+  }
+  // 解析 actionJson
+  if (node.actionJson) {
+    try { actions.value = JSON.parse(node.actionJson) } catch { actions.value = [] }
+  }
+  // 解析 listenerJson
+  if (node.listenerJson) {
+    try { listeners.value = JSON.parse(node.listenerJson) } catch { listeners.value = [] }
+  }
+  nextTick(() => { syncing = false })
 }, { immediate: true })
 
 // ===== 事件 =====
@@ -429,12 +498,18 @@ function removeListener(idx: number) {
 // ===== 提交更新 =====
 function buildUpdatedNode(): WorkflowNode {
   const node = { ...form }
+  // 继承旧配置中的非受管字段，只覆盖本面板管理的键
   const config: Record<string, any> = {}
+  try {
+    if (form.configJson) Object.assign(config, JSON.parse(form.configJson))
+  } catch { /* ignore */ }
   if (nodeFormId.value) config.formId = nodeFormId.value
+  else delete config.formId
   if (form.nodeType === 'timer') Object.assign(config, timerConfig)
   if (form.nodeType === 'trigger') Object.assign(config, triggerConfig)
   if (form.nodeType === 'service') Object.assign(config, serviceConfig)
-  node.configJson = Object.keys(config).length > 0 ? JSON.stringify(config) : form.configJson
+  if (form.nodeType === 'sub_process') Object.assign(config, subProcessConfig)
+  node.configJson = Object.keys(config).length > 0 ? JSON.stringify(config) : undefined
   node.actionJson = actions.value.length > 0 ? JSON.stringify(actions.value) : undefined
   node.listenerJson = listeners.value.length > 0 ? JSON.stringify(listeners.value) : undefined
   return node
@@ -442,15 +517,13 @@ function buildUpdatedNode(): WorkflowNode {
 
 // 自动提交
 watch(() => form, () => {
-  if (props.node) {
-    emit('update', buildUpdatedNode())
-  }
+  if (syncing || !props.node) return
+  emit('update', buildUpdatedNode())
 }, { deep: true })
 
 watch(nodeFormId, () => {
-  if (props.node) {
-    emit('update', buildUpdatedNode())
-  }
+  if (syncing || !props.node) return
+  emit('update', buildUpdatedNode())
 })
 </script>
 

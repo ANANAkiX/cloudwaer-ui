@@ -308,6 +308,11 @@ const onAvatarUpload = async (options: { file: File }) => {
     const result = await uploadMyAvatar(options.file)
     if (result?.accessUrl) {
       profileForm.avatar = result.accessUrl
+      // 即时回写 store，顶栏头像同步刷新
+      if (userStore.userInfo) {
+        userStore.userInfo.avatar = result.accessUrl
+        localStorage.setItem('userInfo', JSON.stringify(userStore.userInfo))
+      }
       message.success('头像上传成功')
     }
   } catch {
@@ -330,6 +335,7 @@ const handleSaveProfile = async () => {
       })
       if (userStore.userInfo) {
         userStore.userInfo.nickname = profileForm.nickname
+        userStore.userInfo.avatar = profileForm.avatar
         localStorage.setItem('userInfo', JSON.stringify(userStore.userInfo))
       }
       message.success('保存成功')

@@ -3,8 +3,8 @@
     <el-card>
       <template #header>
         <div class="card-header">
-          <span>流程设计器</span>
-          <div class="card-actions">
+          <span v-if="!embedded">流程设计器</span>
+          <div class="card-actions" :style="embedded ? 'margin-left: auto' : ''">
             <el-button @click="goBack"><el-icon><ArrowLeft /></el-icon> 返回</el-button>
             <el-button type="primary" @click="handleSave"><el-icon><Check /></el-icon> 保存</el-button>
             <el-button type="success" @click="handlePublish"><el-icon><Upload /></el-icon> 发布</el-button>
@@ -14,7 +14,7 @@
 
       <!-- 三栏布局 -->
       <div class="designer-layout">
-        <!-- 左侧：节点面板 -->
+        <!-- 左侧：节点工具箱 -->
         <div class="designer-left">
           <div class="panel-title">节点</div>
           <div class="node-palette">
@@ -31,33 +31,12 @@
               <span class="palette-label">{{ item.label }}</span>
             </div>
           </div>
-
-          <!-- 流程属性 -->
-          <div class="panel-title" style="margin-top: 16px">流程属性</div>
-          <el-form :model="defForm" label-width="70px" size="small">
-            <el-form-item label="标识">
-              <el-input v-model="defForm.defKey" placeholder="唯一标识" />
-            </el-form-item>
-            <el-form-item label="名称">
-              <el-input v-model="defForm.defName" placeholder="流程名称" />
-            </el-form-item>
-            <el-form-item label="分类">
-              <el-input v-model="defForm.category" placeholder="分类" />
-            </el-form-item>
-            <el-form-item label="关联表单">
-              <el-select v-model="defForm.formId" placeholder="选择表单" clearable style="width: 100%">
-                <el-option v-for="f in formList" :key="f.id" :label="f.formName" :value="f.id" />
-              </el-select>
-            </el-form-item>
-            <el-form-item label="到期时间">
-              <el-date-picker v-model="defForm.endTime" type="datetime" value-format="YYYY-MM-DD HH:mm:ss" style="width: 100%" />
-            </el-form-item>
-          </el-form>
         </div>
 
         <!-- 中间：画布 -->
         <div class="designer-center">
           <FlowCanvas
+            ref="canvasRef"
             :nodes="nodes"
             :edges="edges"
             @node-click="onNodeClick"
@@ -101,8 +80,28 @@
             </el-form>
           </template>
           <template v-else>
-            <div class="panel-title">属性面板</div>
-            <el-empty description="点击节点或连线查看属性" :image-size="80" />
+            <!-- 未选中节点/连线 = 流程属性检查器 -->
+            <div class="panel-title">流程属性</div>
+            <el-form :model="defForm" label-width="70px" size="small">
+              <el-form-item label="标识">
+                <el-input v-model="defForm.defKey" placeholder="唯一标识" />
+              </el-form-item>
+              <el-form-item label="名称">
+                <el-input v-model="defForm.defName" placeholder="流程名称" />
+              </el-form-item>
+              <el-form-item label="分类">
+                <el-input v-model="defForm.category" placeholder="分类" />
+              </el-form-item>
+              <el-form-item label="关联表单">
+                <el-select v-model="defForm.formId" placeholder="选择表单" clearable style="width: 100%">
+                  <el-option v-for="f in formList" :key="f.id" :label="f.formName" :value="f.id" />
+                </el-select>
+              </el-form-item>
+              <el-form-item label="到期时间">
+                <el-date-picker v-model="defForm.endTime" type="datetime" value-format="YYYY-MM-DD HH:mm:ss" style="width: 100%" />
+              </el-form-item>
+            </el-form>
+            <div class="inspector-hint">点击节点或连线可切换属性面板</div>
           </template>
         </div>
       </div>
@@ -130,6 +129,8 @@ import {
 const props = defineProps<{
   /** 模型 ID（对话框模式传入，为空则从 route.query 读取） */
   defId?: string | number | null
+  /** 嵌入弹窗模式：隐藏自身标题（弹窗已有标题，避免双层壳） */
+  embedded?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -162,6 +163,14 @@ const dragType = ref('')
 // 表单列表
 const formList = ref<{ id: string | number; formName: string }[]>([])
 
+// 画布引用（自动适配用）
+const canvasRef = ref<InstanceType<typeof FlowCanvas> | null>(null)
+
+function autoFit() {
+  // 弹窗/路由渲染完成后按内容边界适配视图
+  setTimeout(() => canvasRef.value?.fitContent?.(), 220)
+}
+
 // 节点类型面板
 const nodeTypes = [
   { type: 'start', label: '开始节点', icon: '▶' },
@@ -191,6 +200,7 @@ onMounted(async () => {
       y: 300
     })
   }
+  autoFit()
   window.addEventListener('keydown', onKeyDown)
 })
 
@@ -211,6 +221,7 @@ watch(() => props.defId, async (newId) => {
     selectedNode.value = null
     selectedEdge.value = null
   }
+  autoFit()
 })
 
 onBeforeUnmount(() => {
@@ -345,7 +356,7 @@ function onEdgeAdd(sourceId: string, targetId: string) {
     sourceId,
     targetId,
     edgeName: '',
-    condition: ''
+    edgeCondition: ''
   })
 }
 
@@ -470,7 +481,7 @@ function goBack() {
 .designer-left {
   width: 240px;
   overflow-y: auto;
-  border-right: 1px solid var(--border, #e2e8f0);
+  border-right: 1px solid var(--cw-border);
   padding-right: 12px;
 }
 
@@ -482,53 +493,64 @@ function goBack() {
 .designer-right {
   width: 300px;
   overflow-y: auto;
-  border-left: 1px solid var(--border, #e2e8f0);
+  border-left: 1px solid var(--cw-border);
   padding-left: 12px;
 }
 
 .panel-title {
   font-size: 13px;
   font-weight: 600;
-  color: var(--ink, #333);
+  color: var(--cw-text);
   margin-bottom: 12px;
   padding-bottom: 8px;
-  border-bottom: 1px solid var(--border, #e2e8f0);
+  border-bottom: 1px solid var(--cw-border);
 }
 
 .node-palette {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 8px;
 }
 
 .palette-item {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  border: 1px solid var(--border, #e2e8f0);
+  gap: 6px;
+  padding: 7px 8px;
+  border: 1px solid var(--cw-border);
   border-radius: 6px;
   cursor: grab;
   transition: all 0.2s;
-  background: var(--card, #fff);
+  background: var(--cw-surface);
+  min-width: 0;
 }
 
 .palette-item:hover {
-  border-color: #3b82f6;
-  background: color-mix(in srgb, #3b82f6 5%, var(--card, #fff));
+  border-color: var(--cw-accent);
+  background: color-mix(in srgb, var(--cw-accent) 8%, var(--cw-surface));
 }
 
 .palette-active {
-  border-color: #3b82f6;
-  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+  border-color: var(--cw-accent);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--cw-accent) 30%, transparent);
 }
 
 .palette-icon {
-  font-size: 18px;
+  font-size: 15px;
+  flex-shrink: 0;
 }
 
 .palette-label {
-  font-size: 12px;
-  color: var(--ink, #333);
+  font-size: 11px;
+  color: var(--cw-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inspector-hint {
+  margin-top: 10px;
+  font-size: 11px;
+  color: var(--cw-control-text);
 }
 </style>
