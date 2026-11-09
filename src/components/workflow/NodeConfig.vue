@@ -200,6 +200,8 @@
             <el-option label="任务创建" value="task:create" />
             <el-option label="任务完成" value="task:complete" />
           </el-select>
+          <el-input v-model="action.config" size="small" :placeholder="actionPlaceholder(action.actionType)"
+            style="width: 170px" />
           <el-button link type="danger" size="small" @click="removeAction(idx)">
             <el-icon><Delete /></el-icon>
           </el-button>
@@ -224,6 +226,8 @@
           <el-select v-model="listener.className" size="small" placeholder="选择监听器" style="width: 160px">
             <el-option v-for="(label, key) in listenerOptions" :key="key" :label="label" :value="key" />
           </el-select>
+          <el-input v-if="listener.className === 'webhookListener'" v-model="listener.url" size="small"
+            placeholder="回调 URL" style="width: 150px" />
           <el-button link type="danger" size="small" @click="removeListener(idx)">
             <el-icon><Delete /></el-icon>
           </el-button>
@@ -312,6 +316,7 @@ const actions = ref<NodeAction[]>([])
 interface NodeListener {
   eventType: string
   className: string
+  url?: string
 }
 const listeners = ref<NodeListener[]>([])
 
@@ -466,7 +471,14 @@ watch(() => props.node, (node) => {
   }
   // 解析 actionJson
   if (node.actionJson) {
-    try { actions.value = JSON.parse(node.actionJson) } catch { actions.value = [] }
+    try {
+      const raw = JSON.parse(node.actionJson)
+      actions.value = (Array.isArray(raw) ? raw : []).map((a: any) => ({
+        actionType: a.actionType || 'log',
+        eventType: a.eventType || 'node:enter',
+        config: unwrapActionConfig(a.actionType, a.config)
+      }))
+    } catch { actions.value = [] }
   }
   // 解析 listenerJson
   if (node.listenerJson) {
@@ -510,9 +522,54 @@ function buildUpdatedNode(): WorkflowNode {
   if (form.nodeType === 'service') Object.assign(config, serviceConfig)
   if (form.nodeType === 'sub_process') Object.assign(config, subProcessConfig)
   node.configJson = Object.keys(config).length > 0 ? JSON.stringify(config) : undefined
-  node.actionJson = actions.value.length > 0 ? JSON.stringify(actions.value) : undefined
+  node.actionJson = actions.value.length > 0
+    ? JSON.stringify(actions.value.map(a => ({
+        actionType: a.actionType,
+        eventType: a.eventType,
+        config: wrapActionConfig(a.actionType, a.config)
+      })))
+    : undefined
   node.listenerJson = listeners.value.length > 0 ? JSON.stringify(listeners.value) : undefined
   return node
+}
+
+// 动作配置：界面只填主值（URL/接收人/topic/文本），存库时包装成执行器 JSON
+const ACTION_PLACEHOLDER: Record<string, string> = {
+  http: '回调 URL，如 https://...',
+  notify: '接收人用户名，逗号分隔',
+  mq: '消息 topic',
+  log: '日志内容'
+}
+
+function actionPlaceholder(type?: string): string {
+  return ACTION_PLACEHOLDER[type || ''] || '配置'
+}
+
+function wrapActionConfig(type: string | undefined, raw?: string): string | undefined {
+  if (raw == null || raw === '') return raw
+  if (raw.trim().startsWith('{')) return raw
+  switch (type) {
+    case 'http':
+      return JSON.stringify({ url: raw.trim(), method: 'POST', body: '' })
+    case 'notify':
+      return JSON.stringify({ notifyType: 'inner', target: raw.trim(), title: '流程通知', content: '您有新的流程通知' })
+    case 'mq':
+      return JSON.stringify({ topic: raw.trim(), tag: '', payload: '' })
+    default:
+      return raw
+  }
+}
+
+function unwrapActionConfig(type: string | undefined, cfg?: string): string {
+  if (!cfg) return ''
+  if (!cfg.trim().startsWith('{')) return cfg
+  try {
+    const obj = JSON.parse(cfg)
+    if (type === 'http') return obj.url || ''
+    if (type === 'notify') return obj.target || ''
+    if (type === 'mq') return obj.topic || ''
+    return cfg
+  } catch { return cfg }
 }
 
 // 自动提交
