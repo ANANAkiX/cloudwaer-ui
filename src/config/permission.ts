@@ -114,21 +114,6 @@ export const ButtonPermissionConfig: Record<string, PermissionConfig[]> = {
     { permissionCode: 'codegen:generator:frontend', visible: true }
   ],
 
-  // Flowable 模型管理（主操作）
-  'flowableModel': [
-    { permissionCode: 'flowable:model:save', visible: true },
-    { permissionCode: 'flowable:model:publish', visible: true },
-    { permissionCode: 'flowable:model:delete', visible: true },
-    { permissionCode: 'flowable:model:copy', visible: true }
-  ],
-
-  // Flowable 任务
-  'flowableTask': [
-    { permissionCode: 'flowable:task:claim', visible: true },
-    { permissionCode: 'flowable:task:complete', visible: true },
-    { permissionCode: 'flowable:task:delete', visible: true }
-  ],
-
   // 博客主申请
   'blogAuthor': [
     {
@@ -324,6 +309,33 @@ export const ButtonPermissionConfig: Record<string, PermissionConfig[]> = {
       permissionCode: 'admin:oauth:delete',
       visible: true
     }
+  ],
+
+  // 工作流 - 流程定义
+  'workflowDef': [
+    { permissionCode: 'workflow:def:save', visible: true },
+    { permissionCode: 'workflow:def:publish', visible: true },
+    { permissionCode: 'workflow:def:delete', visible: true }
+  ],
+
+  // 工作流 - 表单管理
+  'workflowForm': [
+    { permissionCode: 'workflow:form:save', visible: true },
+    { permissionCode: 'workflow:form:delete', visible: true }
+  ],
+
+  // 工作流 - 流程实例
+  'workflowInstance': [
+    { permissionCode: 'workflow:instance:start', visible: true },
+    { permissionCode: 'workflow:instance:operate', visible: true },
+    { permissionCode: 'workflow:instance:delete', visible: true }
+  ],
+
+  // 工作流 - 任务
+  'workflowTask': [
+    { permissionCode: 'workflow:task:claim', visible: true },
+    { permissionCode: 'workflow:task:complete', visible: true },
+    { permissionCode: 'workflow:task:delete', visible: true }
   ],
 }
 
