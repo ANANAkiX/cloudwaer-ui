@@ -7,11 +7,15 @@
           <div class="card-actions">
             <el-button @click="load">刷新</el-button>
             <el-button type="primary" plain @click="handleAllRead">全部已读</el-button>
+            <el-button type="danger" plain :disabled="selectedRows.length === 0" @click="handleBatchRemove">
+              批量删除<span v-if="selectedRows.length">（{{ selectedRows.length }}）</span>
+            </el-button>
           </div>
         </div>
       </template>
 
-      <el-table :data="records" border style="width: 100%">
+      <el-table ref="tableRef" :data="records" border style="width: 100%" @selection-change="onSelectionChange">
+        <el-table-column type="selection" width="48" align="center" />
         <el-table-column label="状态" width="80">
           <template #default="{ row }">
             <el-tag :type="row.readFlag ? 'info' : 'danger'" size="small">
@@ -64,7 +68,8 @@
 
 <script setup lang="ts">
 import {onMounted, ref} from 'vue'
-import {inbox, type MessageItem} from '@/api/message.ts'
+import {ElMessage, ElMessageBox} from 'element-plus'
+import {inbox, removeMessages, type MessageItem} from '@/api/message.ts'
 import {messageLink} from '@/utils/messageLink.ts'
 import {useMessageStore} from '@/stores/message.ts'
 
@@ -74,6 +79,41 @@ const records = ref<MessageItem[]>([])
 const total = ref<number>(0)
 const page = ref<number>(1)
 const size = ref<number>(10)
+const selectedRows = ref<MessageItem[]>([])
+
+const onSelectionChange = (rows: MessageItem[]): void => {
+  selectedRows.value = rows
+}
+
+const handleBatchRemove = async (): Promise<void> => {
+  const targets = [...selectedRows.value]
+  if (!targets.length) return
+  try {
+    await ElMessageBox.confirm(`确认删除选中的 ${targets.length} 条消息？`, '批量删除', {type: 'warning'})
+  } catch {
+    return
+  }
+  const ids = targets.map(r => r.recipientId)
+  let ok = 0
+  let failed = 0
+  try {
+    const r: any = await removeMessages(ids)
+    ok = r?.success ?? 0
+    failed = r?.failed ?? 0
+  } catch {
+    // 批量接口不可用时回退单条循环
+    const results = await Promise.allSettled(ids.map(id => messageStore.remove(id)))
+    ok = results.filter(r => r.status === 'fulfilled').length
+    failed = ids.length - ok
+  }
+  selectedRows.value = []
+  await load()
+  if (failed === 0) {
+    ElMessage.success(`已删除 ${ok} 条消息`)
+  } else {
+    ElMessage.warning(`批量删除完成：成功 ${ok} / 失败 ${failed}`)
+  }
+}
 
 const typeText = (type: string): string => {
   if (type === 'NOTICE') return '公告'

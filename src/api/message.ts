@@ -71,3 +71,12 @@ export function removeMessage(recipientId: string): Promise<boolean> {
         method: 'delete'
     })
 }
+
+/** 批量删除收件箱条目 */
+export function removeMessages(recipientIds: (string | number)[]): Promise<{ success: number; failed: number }> {
+    return request({
+        url: '/message/batch-delete',
+        method: 'post',
+        data: recipientIds
+    })
+}

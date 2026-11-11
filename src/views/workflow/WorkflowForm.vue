@@ -11,6 +11,9 @@
             <el-input v-model="keyword" placeholder="搜索表单" clearable style="width: 200px"
               @keyup.enter="loadData" @clear="loadData" />
             <el-button type="primary" @click="loadData">搜索</el-button>
+            <el-button type="danger" plain :disabled="selectedRows.length === 0" @click="handleBatchDelete">
+              批量删除<span v-if="selectedRows.length">（{{ selectedRows.length }}）</span>
+            </el-button>
             <el-button type="primary" @click="handleAdd">
               <el-icon><Plus /></el-icon> 新增表单
             </el-button>
@@ -18,7 +21,9 @@
         </div>
       </template>
 
-      <el-table v-loading="loading" :data="tableData" border style="width: 100%">
+      <el-table ref="tableRef" v-loading="loading" :data="tableData" border style="width: 100%"
+        @selection-change="onSelectionChange">
+        <el-table-column type="selection" width="48" align="center" />
         <el-table-column prop="formKey" label="表单标识" min-width="120" show-overflow-tooltip />
         <el-table-column prop="formName" label="表单名称" min-width="160" show-overflow-tooltip />
         <el-table-column label="分类" width="100" align="center">
@@ -124,6 +129,7 @@ import {
   getWorkflowForms,
   saveWorkflowForm,
   deleteWorkflowForm,
+  batchDeleteForms,
   type WorkflowForm
 } from '@/api/workflow'
 import { useDict, mapDictOptions } from '@/utils/dict'
@@ -246,6 +252,42 @@ async function handleDelete(row: WorkflowForm) {
     ElMessage.success('删除成功')
     loadData()
   } catch { /* ignore */ }
+}
+
+// 批量删除
+const selectedRows = ref<WorkflowForm[]>([])
+
+function onSelectionChange(rows: WorkflowForm[]) {
+  selectedRows.value = rows
+}
+
+async function handleBatchDelete() {
+  const targets = [...selectedRows.value]
+  if (!targets.length) return
+  try {
+    await ElMessageBox.confirm(`确认删除选中的 ${targets.length} 个表单？`, '批量删除', { type: 'warning' })
+  } catch { return }
+  const ids = targets.map(r => r.id as string | number)
+  let res: any
+  try {
+    res = await batchDeleteForms(ids)
+  } catch {
+    // 批量接口不可用时回退单条循环
+    const results = await Promise.allSettled(ids.map(id => deleteWorkflowForm(id)))
+    res = {
+      success: results.filter(r => r.status === 'fulfilled').length,
+      failed: results.filter(r => r.status !== 'fulfilled').length
+    }
+  }
+  selectedRows.value = []
+  loadData()
+  const ok = res?.success ?? 0
+  const fail = res?.failed ?? 0
+  if (fail === 0) {
+    ElMessage.success(`已删除 ${ok} 个表单`)
+  } else {
+    ElMessage.warning(`批量删除完成：成功 ${ok} / 失败 ${fail}`)
+  }
 }
 
 async function handleSubmit() {

@@ -29,9 +29,7 @@
         </el-table-column>
         <el-table-column v-if="activeTab === 'done'" prop="result" label="结果" width="80" align="center">
           <template #default="{ row }">
-            <el-tag :type="row.result === 'approve' ? 'success' : 'danger'" size="small">
-              {{ row.result === 'approve' ? '同意' : '驳回' }}
-            </el-tag>
+            <el-tag :type="resultTagType(row)" size="small">{{ resultLabel(row) }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column label="操作" width="200" fixed="right">
@@ -311,6 +309,21 @@ async function handleMarkAllRead() {
 
 function formatTime(time?: string): string {
   return time ? time.replace('T', ' ').substring(0, 16) : '-'
+}
+
+function resultLabel(row: WorkflowTask): string {
+  const byResult: Record<string, string> = { approve: '同意', reject: '驳回', transfer: '转办', return: '退回' }
+  if (row.result && byResult[row.result]) return byResult[row.result]
+  // 转办/退回未写 result 字段时按任务状态回退
+  const byStatus: Record<number, string> = { 2: '同意', 3: '驳回', 4: '转办', 6: '退回' }
+  return byStatus[row.taskStatus || 0] || row.statusDesc || '-'
+}
+
+function resultTagType(row: WorkflowTask): any {
+  const label = resultLabel(row)
+  if (label === '同意') return 'success'
+  if (label === '驳回') return 'danger'
+  return 'warning'
 }
 
 function getStatusType(status?: number): any {

@@ -47,6 +47,10 @@ export interface WorkflowDef {
   formKey?: string
   endTime?: string
   remark?: string
+  /** 未发布草稿版本ID（主列表聚合标记） */
+  draftId?: string | number
+  /** 未发布草稿版本号 */
+  draftVersion?: number
   nodes?: WorkflowNode[]
   edges?: WorkflowEdge[]
   createTime?: string
@@ -183,6 +187,27 @@ export function deleteWorkflowDef(id: string | number) {
   return request.delete<boolean>('/workflow/definition/delete', { params: { id } })
 }
 
+export interface BatchResult {
+  success: number
+  failed: number
+  skipped: number
+}
+
+/** 批量下线（仅已发布，其余跳过） */
+export function batchOfflineDefs(ids: (string | number)[]) {
+  return request.post<BatchResult>('/workflow/definition/batch-offline', ids)
+}
+
+/** 批量删除（已发布跳过） */
+export function batchDeleteDefs(ids: (string | number)[]) {
+  return request.post<BatchResult>('/workflow/definition/batch-delete', ids)
+}
+
+/** 恢复历史版本：复制为新草稿版本（历史不变） */
+export function rollbackWorkflowDef(id: string | number) {
+  return request.post<string | number>('/workflow/definition/rollback', null, { params: { id } })
+}
+
 // ===== 流程实例 API =====
 
 export function startWorkflow(payload: ProcessStartPayload) {
@@ -312,4 +337,9 @@ export function saveWorkflowForm(data: WorkflowForm) {
 
 export function deleteWorkflowForm(id: string | number) {
   return request.delete<boolean>('/workflow/form/delete', { params: { id } })
+}
+
+/** 批量删除表单 */
+export function batchDeleteForms(ids: (string | number)[]) {
+  return request.post<BatchResult>('/workflow/form/batch-delete', ids)
 }

@@ -6,11 +6,28 @@
           <span v-if="!embedded">流程设计器</span>
           <div class="card-actions" :style="embedded ? 'margin-left: auto' : ''">
             <el-button @click="goBack"><el-icon><ArrowLeft /></el-icon> 返回</el-button>
-            <el-button type="primary" @click="handleSave"><el-icon><Check /></el-icon> 保存</el-button>
-            <el-button type="success" @click="handlePublish"><el-icon><Upload /></el-icon> 发布</el-button>
+            <template v-if="readonly">
+              <el-button type="primary" @click="handleSaveAsNew">
+                <el-icon><Check /></el-icon> 另存为新版本
+              </el-button>
+            </template>
+            <template v-else>
+              <el-button type="primary" @click="handleSave"><el-icon><Check /></el-icon> 保存</el-button>
+              <el-button type="success" @click="handlePublish"><el-icon><Upload /></el-icon> 发布</el-button>
+            </template>
           </div>
         </div>
       </template>
+
+      <el-alert
+        v-if="readonly"
+        class="readonly-banner"
+        type="warning"
+        :closable="false"
+        show-icon
+        title="历史 / 已发布版本为只读快照"
+        description="不可直接修改；点「另存为新版本」生成草稿继续编辑，或在版本列表对历史版本「恢复」"
+      />
 
       <!-- 三栏布局 -->
       <div class="designer-layout">
@@ -39,6 +56,7 @@
             ref="canvasRef"
             :nodes="nodes"
             :edges="edges"
+            :readonly="readonly"
             @node-click="onNodeClick"
             @edge-click="onEdgeClick"
             @node-move="onNodeMove"
@@ -90,7 +108,7 @@
                 <el-input v-model="defForm.defName" placeholder="流程名称" />
               </el-form-item>
               <el-form-item label="分类">
-                <el-input v-model="defForm.category" placeholder="分类" />
+                <DictSelect v-model="defForm.category" type="workflow_def_category" placeholder="选择分类" />
               </el-form-item>
               <el-form-item label="关联表单">
                 <el-select v-model="defForm.formId" placeholder="选择表单" clearable style="width: 100%">
@@ -116,6 +134,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowLeft, Check, Upload, Delete } from '@element-plus/icons-vue'
 import FlowCanvas from '@/components/workflow/FlowCanvas.vue'
 import NodeConfig from '@/components/workflow/NodeConfig.vue'
+import DictSelect from '@/components/DictSelect.vue'
 import {
   getWorkflowDefDetail,
   saveWorkflowDef,
@@ -159,6 +178,9 @@ const selectedEdge = ref<WorkflowEdge | null>(null)
 
 // 拖拽类型
 const dragType = ref('')
+
+// 只读模式：历史/已发布版本只读快照
+const readonly = ref(false)
 
 // 表单列表
 const formList = ref<{ id: string | number; formName: string }[]>([])
@@ -220,6 +242,7 @@ watch(() => props.defId, async (newId) => {
     edges.value = []
     selectedNode.value = null
     selectedEdge.value = null
+    readonly.value = false
   }
   autoFit()
 })
@@ -259,6 +282,8 @@ async function loadDef(id: string) {
       Object.assign(defForm, def)
       nodes.value = def.nodes || []
       edges.value = def.edges || []
+      // 非草稿版本只读（已发布/已归档/已下线）
+      readonly.value = def.defStatus !== undefined && def.defStatus !== null && def.defStatus !== 0
     }
   } catch (e: any) {
     ElMessage.error('加载流程定义失败')
@@ -404,26 +429,31 @@ function removeNode() {
 }
 
 // ===== 保存 / 发布 =====
-async function handleSave() {
+function validateDef(): boolean {
   // 校验：必须有开始节点和结束节点
   const hasStart = nodes.value.some(n => n.nodeType === 'start')
   const hasEnd = nodes.value.some(n => n.nodeType === 'end')
   if (!hasStart) {
     ElMessage.warning('流程必须有开始节点')
-    return
+    return false
   }
   if (!hasEnd) {
     ElMessage.warning('流程必须有结束节点才能保存')
-    return
+    return false
   }
   if (!defForm.defKey?.trim()) {
     ElMessage.warning('请输入流程标识')
-    return
+    return false
   }
   if (!defForm.defName?.trim()) {
     ElMessage.warning('请输入流程名称')
-    return
+    return false
   }
+  return true
+}
+
+async function handleSave() {
+  if (!validateDef()) return
 
   try {
     const data: WorkflowDef = {
@@ -433,6 +463,25 @@ async function handleSave() {
     }
     await saveWorkflowDef(data)
     ElMessage.success('保存成功')
+    emit('close', true)
+  } catch (e: any) {
+    ElMessage.error(e.message || '保存失败')
+  }
+}
+
+async function handleSaveAsNew() {
+  if (!validateDef()) return
+
+  try {
+    // 清空 id → 以当前画布内容生成新草稿版本（历史版本不动）
+    const data: WorkflowDef = {
+      ...defForm,
+      id: undefined,
+      nodes: nodes.value,
+      edges: edges.value
+    }
+    await saveWorkflowDef(data)
+    ElMessage.success('已另存为新的草稿版本')
     emit('close', true)
   } catch (e: any) {
     ElMessage.error(e.message || '保存失败')
@@ -552,5 +601,9 @@ function goBack() {
   margin-top: 10px;
   font-size: 11px;
   color: var(--cw-control-text);
+}
+
+.readonly-banner {
+  margin-bottom: 10px;
 }
 </style>
