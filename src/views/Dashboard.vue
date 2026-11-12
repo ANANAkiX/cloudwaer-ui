@@ -33,15 +33,7 @@
             <p class="apply-tip">
               访客可自助申请开通博客主权限（文章完整 CRUD）。提交后由管理员在「博客管理 → 博客主申请」审核，并通过用户管理分配角色。
             </p>
-            <el-alert
-              v-if="myApply"
-              :title="applyAlertTitle"
-              :type="applyAlertType"
-              show-icon
-              :closable="false"
-              class="apply-alert"
-            />
-            <div class="apply-form" v-if="canApply">
+            <div class="apply-form">
               <el-input
                 v-model="reason"
                 type="textarea"
@@ -53,11 +45,10 @@
               <el-button
                 type="primary"
                 :loading="submitting"
-                :disabled="myApply?.applyStatus === 0"
                 style="margin-top: 12px"
                 @click="onApply"
               >
-                {{ myApply?.applyStatus === 0 ? '已提交，等待审核' : '提交申请' }}
+                提交申请
               </el-button>
             </div>
           </div>
@@ -68,54 +59,21 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed } from 'vue'
 import { message } from '@/api/request.ts'
-import { applyAuthor, getMyAuthorApply } from '@/api/blog'
+import { applyAuthor } from '@/api/blog'
 import { useUserStore } from '@/stores/user'
 
 const userStore = useUserStore()
 const reason = ref('')
 const submitting = ref(false)
-const myApply = ref(null)
-const roleIds = ref([])
 
 const showApplyCard = computed(() => {
   // ADMIN / BLOGGER 不显示申请卡；其余登录用户可见
   if (!userStore.token) return false
-  if (roleIds.value.includes(1) || roleIds.value.includes(4)) return false
-  return true
+  const roles = (userStore.userInfo?.roleIds || []).map(Number)
+  return !roles.includes(1) && !roles.includes(4)
 })
-
-const canApply = computed(() => {
-  if (!myApply.value) return true
-  // 待处理或已拒绝可再申请
-  return myApply.value.applyStatus !== 0
-})
-
-const applyAlertTitle = computed(() => {
-  const s = myApply.value?.applyStatus
-  if (s === 0) return '已有待处理申请，请等待管理员审核'
-  if (s === 1) return '申请已通过，请重新登录后使用博客功能'
-  if (s === 2) return '上次申请被拒绝，可修改理由后重新申请'
-  return ''
-})
-
-const applyAlertType = computed(() => {
-  const s = myApply.value?.applyStatus
-  if (s === 0) return 'warning'
-  if (s === 1) return 'success'
-  return 'info'
-})
-
-async function loadApply() {
-  if (!userStore.token) return
-  try {
-    roleIds.value = (userStore.userInfo?.roleIds || []).map(Number)
-    myApply.value = await getMyAuthorApply()
-  } catch {
-    myApply.value = null
-  }
-}
 
 async function onApply() {
   submitting.value = true
@@ -123,15 +81,12 @@ async function onApply() {
     await applyAuthor(reason.value.trim() || undefined)
     message.success('申请已提交，管理员审核后将分配博客主角色')
     reason.value = ''
-    await loadApply()
   } catch (e) {
     message.error(e instanceof Error ? e.message : '申请失败')
   } finally {
     submitting.value = false
   }
 }
-
-onMounted(loadApply)
 </script>
 
 <style scoped>
@@ -174,9 +129,5 @@ onMounted(loadApply)
   color: #606266;
   font-size: 14px;
   line-height: 1.6;
-}
-
-.apply-alert {
-  margin-bottom: 12px;
 }
 </style>
